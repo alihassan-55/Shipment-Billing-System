@@ -93,6 +93,7 @@ export const useDataStore = create((set, get) => ({
       const response = await retryRequest(() => axios.get('/customers', { params }))
       console.log('Customers response:', response.data)
       set({ customers: response.data.customers || [], customersLoading: false })
+      return response.data // Return the full response for search functionality
     } catch (error) {
       set({ customersLoading: false })
       console.error('Failed to fetch customers after retries:', error)
@@ -103,18 +104,51 @@ export const useDataStore = create((set, get) => ({
       if (error.response?.status === 500) {
         console.error('Server error - database connection may be lost. Please refresh the page.')
       }
+      return { customers: [], pagination: {} } // Return empty response on error
     }
   },
   
   createCustomer: async (customerData) => {
     try {
-      const response = await axios.post('/customers', customerData)
+      const response = await retryRequest(() => axios.post('/customers', customerData))
       set(state => ({ customers: [...state.customers, response.data] }))
       return { success: true, data: response.data }
     } catch (error) {
       return { 
         success: false, 
         error: error.response?.data?.error || 'Failed to create customer' 
+      }
+    }
+  },
+
+  updateCustomer: async (id, customerData) => {
+    try {
+      const response = await retryRequest(() => axios.put(`/customers/${id}`, customerData))
+      set(state => ({
+        customers: state.customers.map(customer => 
+          customer.id === id ? response.data : customer
+        )
+      }))
+      return { success: true, data: response.data }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Failed to update customer' 
+      }
+    }
+  },
+
+  deleteCustomer: async (id) => {
+    try {
+      await retryRequest(() => axios.delete(`/customers/${id}`))
+      set(state => ({
+        customers: state.customers.filter(customer => customer.id !== id)
+      }))
+      return { success: true }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Failed to delete customer' 
       }
     }
   },

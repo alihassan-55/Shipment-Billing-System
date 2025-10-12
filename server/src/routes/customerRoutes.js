@@ -6,6 +6,7 @@ import {
   getCustomers,
   getCustomer,
   updateCustomer,
+  deleteCustomer,
 } from '../controllers/customerController.js';
 
 const router = Router();
@@ -16,6 +17,7 @@ router.post('/', requireRoles('admin', 'operator'), createCustomer);
 router.get('/', getCustomers);
 router.get('/:id', getCustomer);
 router.put('/:id', requireRoles('admin', 'operator'), updateCustomer);
+router.delete('/:id', requireRoles('admin'), deleteCustomer);
 
 export default router;
 
