@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  shipmentsCreated Shipment[] @relation("ShipmentsCreatedBy")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  invoices  Invoice[]
+  addresses Address[]
+  shipmentsSent Shipment[] @relation("Sender")
+  shipmentsReceived Shipment[] @relation("Receiver")
+}
+
+model Address {
+  id          String   @id @default(uuid())
+  customer    Customer @relation(fields: [customerId], references: [id])
+  customerId  String
+  type        String
+  line1       String
+  line2       String?
+  city        String
+  state       String?
+  postalCode  String?
+  country     String
+  pickupShipments Shipment[] @relation("PickupAddress")
+  deliveryShipments Shipment[] @relation("DeliveryAddress")
+}
+
+model Shipment {
+  id               String   @id @default(uuid())
+  waybill          String   @unique
+  sender           Customer @relation("Sender", fields: [senderId], references: [id])
+  senderId         String
+  receiver         Customer @relation("Receiver", fields: [receiverId], references: [id])
+  receiverId       String
+  pickupAddress    Address  @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  pickupAddressId  String
+  deliveryAddress  Address  @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
+  deliveryAddressId String
+  weight           Float
+  dimensions       String?
+  serviceType      String
+  declaredValue    Float?
+  codAmount        Float?
+  status           String
+  bookedAt         DateTime @default(now())
+  expectedDelivery DateTime?
+  deliveredAt      DateTime?
+  invoice          Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId        String?
+  events           ShipmentEvent[]
+  lineItems        InvoiceLineItem[]
+  createdBy        User     @relation("ShipmentsCreatedBy", fields: [createdById], references: [id])
+  createdById      String
+}
+
+model ShipmentEvent {
+  id          String   @id @default(uuid())
+  shipment    Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId  String
+  eventType   String
+  description String?
+  location    String?
+  occurredAt  DateTime
+  recordedBy  String?
+}
+
+model Invoice {
+  id            String            @id @default(uuid())
+  invoiceNumber String            @unique
+  customer      Customer          @relation(fields: [customerId], references: [id])
+  customerId    String
+  issuedDate    DateTime
+  dueDate       DateTime?
+  subtotal      Float
+  tax           Float
+  total         Float
+  currency      String @default("USD")
+  status        String
+  pdfPath       String?
+  lineItems     InvoiceLineItem[]
+  payments      Payment[]
+  shipments     Shipment[]
+}
+
+model InvoiceLineItem {
+  id         String   @id @default(uuid())
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
+  invoiceId  String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId String
+  description String?
+  quantity    Int     @default(1)
+  unitPrice   Float
+  total       Float
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  invoiceId   String
+  paymentDate DateTime
+  amount      Float
+  method      String
+  reference   String?
+  receivedBy  String?
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  entityType String
+  entityId   String
+  action     String
+  oldData    Json?
+  newData    Json?
+  createdAt  DateTime @default(now())
+}

@@ -1,0 +1,11 @@
+import { User } from '../models/User.js';
+
+export async function getMe(req, res) {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const user = await User.findByPk(userId, { attributes: ['id', 'name', 'email', 'role'] });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  res.json({ user });
+}

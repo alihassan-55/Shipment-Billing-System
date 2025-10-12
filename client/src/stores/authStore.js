@@ -1,0 +1,75 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import axios from 'axios'
+
+const API_BASE_URL = 'http://localhost:3001/api'
+
+// Configure axios defaults
+axios.defaults.baseURL = API_BASE_URL
+axios.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+export const useAuthStore = create(
+  persist(
+    (set, get) => ({
+      token: null,
+      user: null,
+      isLoading: false,
+      
+      login: async (email, password) => {
+        set({ isLoading: true })
+        try {
+          const response = await axios.post('/auth/login', { email, password })
+          const { token } = response.data
+          set({ token, isLoading: false })
+          
+          // Get user info
+          await get().getCurrentUser()
+          return { success: true }
+        } catch (error) {
+          set({ isLoading: false })
+          return { 
+            success: false, 
+            error: error.response?.data?.error || 'Login failed' 
+          }
+        }
+      },
+      
+      logout: () => {
+        set({ token: null, user: null })
+        axios.defaults.headers.common['Authorization'] = ''
+      },
+      
+      getCurrentUser: async () => {
+        try {
+          const response = await axios.get('/users/me')
+          set({ user: response.data })
+        } catch (error) {
+          console.error('Failed to get current user:', error)
+        }
+      },
+      
+      createUser: async (userData) => {
+        try {
+          const response = await axios.post('/users', userData)
+          return { success: true, data: response.data }
+        } catch (error) {
+          return { 
+            success: false, 
+            error: error.response?.data?.error || 'Failed to create user' 
+          }
+        }
+      }
+    }),
+    {
+      name: 'auth-storage',
+      partialize: (state) => ({ token: state.token, user: state.user }),
+    }
+  )
+)
+
