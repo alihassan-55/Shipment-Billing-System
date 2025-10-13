@@ -159,6 +159,7 @@ export const useDataStore = create((set, get) => ({
       const response = await retryRequest(() => axios.get('/shipments', { params }))
       console.log('Shipments response:', response.data)
       set({ shipments: response.data.shipments || [], shipmentsLoading: false })
+      return response.data // Return the full response for search functionality
     } catch (error) {
       set({ shipmentsLoading: false })
       console.error('Failed to fetch shipments after retries:', error)
@@ -167,6 +168,7 @@ export const useDataStore = create((set, get) => ({
       if (error.response?.status === 500) {
         console.error('Server error - database connection may be lost. Please refresh the page.')
       }
+      return { shipments: [], pagination: {} } // Return empty response on error
     }
   },
   
@@ -179,6 +181,26 @@ export const useDataStore = create((set, get) => ({
       return { 
         success: false, 
         error: error.response?.data?.error || 'Failed to create shipment' 
+      }
+    }
+  },
+
+  updateShipment: async (id, shipmentData) => {
+    try {
+      console.log('Updating shipment:', id, shipmentData)
+      const response = await axios.put(`/shipments/${id}`, shipmentData)
+      console.log('Update response:', response.data)
+      set(state => ({
+        shipments: state.shipments.map(shipment => 
+          shipment.id === id ? response.data : shipment
+        )
+      }))
+      return { success: true, data: response.data }
+    } catch (error) {
+      console.error('Update shipment error:', error.response?.data || error.message)
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Failed to update shipment' 
       }
     }
   },

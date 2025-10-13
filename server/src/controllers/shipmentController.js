@@ -12,10 +12,22 @@ export async function createShipment(req, res) {
     declaredValue,
     codAmount,
     expectedDelivery,
+    // Additional fields from comprehensive form
+    shipperAddress1,
+    shipperAddress2,
+    shipperCity,
+    shipperState,
+    shipperZipCode,
+    shipperCountry,
+    consigneeAddress,
+    consigneeCity,
+    consigneeState,
+    consigneePostalCode,
+    consigneeCountry,
   } = req.body;
 
-  if (!senderId || !receiverId || !pickupAddressId || !deliveryAddressId || !weight || !serviceType) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!senderId || !receiverId || !weight || !serviceType) {
+    return res.status(400).json({ error: 'Missing required fields: senderId, receiverId, weight, serviceType' });
   }
 
   // Generate unique waybill (format: CMS-YYYYMMDD-XXXX)
@@ -24,13 +36,76 @@ export async function createShipment(req, res) {
   const waybill = `CMS-${date}-${random}`;
 
   try {
+    // Handle pickup address - use provided ID or create from form data
+    let finalPickupAddressId = pickupAddressId;
+    if (!finalPickupAddressId && shipperAddress1 && shipperCity) {
+      const pickupAddress = await prisma.address.create({
+        data: {
+          customerId: senderId,
+          type: 'pickup',
+          line1: shipperAddress1,
+          line2: shipperAddress2 || null,
+          city: shipperCity,
+          state: shipperState || null,
+          postalCode: shipperZipCode || null,
+          country: shipperCountry || 'US',
+        },
+      });
+      finalPickupAddressId = pickupAddress.id;
+    }
+
+    // Handle delivery address - use provided ID or create from form data
+    let finalDeliveryAddressId = deliveryAddressId;
+    if (!finalDeliveryAddressId && consigneeAddress && consigneeCity) {
+      const deliveryAddress = await prisma.address.create({
+        data: {
+          customerId: receiverId,
+          type: 'delivery',
+          line1: consigneeAddress,
+          line2: null,
+          city: consigneeCity,
+          state: consigneeState || null,
+          postalCode: consigneePostalCode || null,
+          country: consigneeCountry || 'US',
+        },
+      });
+      finalDeliveryAddressId = deliveryAddress.id;
+    }
+
+    // If still no addresses, create default ones
+    if (!finalPickupAddressId) {
+      const pickupAddress = await prisma.address.create({
+        data: {
+          customerId: senderId,
+          type: 'pickup',
+          line1: 'Default Pickup Address',
+          city: 'Unknown',
+          country: 'US',
+        },
+      });
+      finalPickupAddressId = pickupAddress.id;
+    }
+
+    if (!finalDeliveryAddressId) {
+      const deliveryAddress = await prisma.address.create({
+        data: {
+          customerId: receiverId,
+          type: 'delivery',
+          line1: 'Default Delivery Address',
+          city: 'Unknown',
+          country: 'US',
+        },
+      });
+      finalDeliveryAddressId = deliveryAddress.id;
+    }
+
     const shipment = await prisma.shipment.create({
       data: {
         waybill,
         senderId,
         receiverId,
-        pickupAddressId,
-        deliveryAddressId,
+        pickupAddressId: finalPickupAddressId,
+        deliveryAddressId: finalDeliveryAddressId,
         weight: parseFloat(weight),
         dimensions,
         serviceType,
@@ -50,7 +125,8 @@ export async function createShipment(req, res) {
 
     return res.status(201).json(shipment);
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to create shipment' });
+    console.error('Shipment creation error:', error);
+    return res.status(500).json({ error: 'Failed to create shipment: ' + error.message });
   }
 }
 
@@ -135,10 +211,30 @@ export async function updateShipment(req, res) {
   const { id } = req.params;
   const updates = req.body;
 
+  // Define allowed fields for update (exclude relations and computed fields)
+  const allowedFields = [
+    'status',
+    'serviceType', 
+    'weight',
+    'dimensions',
+    'declaredValue',
+    'codAmount',
+    'expectedDelivery',
+    'deliveredAt'
+  ];
+
+  // Filter updates to only include allowed fields
+  const filteredUpdates = {};
+  allowedFields.forEach(field => {
+    if (updates[field] !== undefined) {
+      filteredUpdates[field] = updates[field];
+    }
+  });
+
   try {
     const shipment = await prisma.shipment.update({
       where: { id },
-      data: updates,
+      data: filteredUpdates,
       include: {
         sender: true,
         receiver: true,
@@ -149,8 +245,9 @@ export async function updateShipment(req, res) {
 
     return res.json(shipment);
   } catch (error) {
+    console.error('Shipment update error:', error);
     if (error.code === 'P2025') return res.status(404).json({ error: 'Shipment not found' });
-    return res.status(500).json({ error: 'Failed to update shipment' });
+    return res.status(500).json({ error: 'Failed to update shipment: ' + error.message });
   }
 }
 

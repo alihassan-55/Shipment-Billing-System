@@ -6,15 +6,9 @@ const API_BASE_URL = 'http://localhost:3001/api'
 
 // Configure axios defaults
 axios.defaults.baseURL = API_BASE_URL
-axios.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
 
-export const useAuthStore = create(
+// Create the store first
+const useAuthStore = create(
   persist(
     (set, get) => ({
       token: null,
@@ -27,6 +21,9 @@ export const useAuthStore = create(
           const response = await axios.post('/auth/login', { email, password })
           const { token } = response.data
           set({ token, isLoading: false })
+          
+          // Update axios headers
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
           
           // Get user info
           await get().getCurrentUser()
@@ -72,4 +69,40 @@ export const useAuthStore = create(
     }
   )
 )
+
+// Set up axios interceptor after store creation
+axios.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token
+  console.log('Axios request interceptor - Token:', token ? 'Present' : 'Missing')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Add response interceptor to handle auth errors
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.error('Authentication error - Token may be invalid or expired')
+      // Clear the token and redirect to login
+      useAuthStore.getState().logout()
+    }
+    return Promise.reject(error)
+  }
+)
+
+// Handle token refresh on app load
+const initializeAuth = () => {
+  const { token } = useAuthStore.getState()
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  }
+}
+
+// Initialize auth when the module loads
+initializeAuth()
+
+export { useAuthStore }
 
