@@ -7,10 +7,13 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
-import shipmentRoutes from './routes/shipmentRoutes.js';
 import invoiceRoutes from './routes/invoiceRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import bulkImportRoutes from './routes/bulkImportRoutes.js';
+import shipperRoutes from './routes/shipperRoutes.js';
+import consigneeRoutes from './routes/consigneeRoutes.js';
+import serviceProviderRoutes from './routes/serviceProviderRoutes.js';
+import newShipmentRoutes from './routes/newShipmentRoutes.js';
 import { checkDatabaseConnection } from './db/client.js';
 
 dotenv.config();
@@ -35,10 +38,13 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/customers', customerRoutes);
-app.use('/api/shipments', shipmentRoutes);
+app.use('/api/shipments', newShipmentRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/bulk-import', bulkImportRoutes);
+app.use('/api/shippers', shipperRoutes);
+app.use('/api/consignees', consigneeRoutes);
+app.use('/api/service-providers', serviceProviderRoutes);
 
 // 404 handler
 app.use((req, res, _next) => {
