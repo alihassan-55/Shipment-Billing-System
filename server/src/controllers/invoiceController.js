@@ -206,6 +206,8 @@ export async function generateInvoicePDFEndpoint(req, res) {
   const { id } = req.params;
 
   try {
+    console.log(`Generating PDF for invoice: ${id}`);
+    
     const invoice = await prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -218,10 +220,16 @@ export async function generateInvoicePDFEndpoint(req, res) {
       },
     });
 
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (!invoice) {
+      console.log(`Invoice not found: ${id}`);
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
 
-    // Generate PDF (this would typically be queued)
+    console.log(`Found invoice: ${invoice.invoiceNumber}`);
+
+    // Generate PDF
     const pdfPath = await generateInvoicePDF(id);
+    console.log(`PDF generated at: ${pdfPath}`);
     
     // Update invoice with PDF path
     await prisma.invoice.update({
@@ -229,8 +237,25 @@ export async function generateInvoicePDFEndpoint(req, res) {
       data: { pdfPath },
     });
 
-    return res.json({ pdfPath, message: 'PDF generated successfully' });
+    // Send the PDF file with CORS headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`);
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    const fs = await import('fs/promises');
+    const pdfBuffer = await fs.readFile(pdfPath);
+    console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
+    
+    res.status(200).send(pdfBuffer);
   } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     return res.status(500).json({ error: 'Failed to generate PDF' });
   }
 }
