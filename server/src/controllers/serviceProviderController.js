@@ -2,7 +2,7 @@ import { prisma } from '../db/client.js';
 
 export async function getServiceProviders(req, res) {
   try {
-    const serviceProviders = await prisma.serviceProvider.findMany({
+    const serviceProviders = await prisma.service_providers.findMany({
       orderBy: { name: 'asc' }
     });
 
@@ -21,7 +21,7 @@ export async function createServiceProvider(req, res) {
   }
 
   try {
-    const serviceProvider = await prisma.serviceProvider.create({
+    const serviceProvider = await prisma.service_providers.create({
       data: { name }
     });
 

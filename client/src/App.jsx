@@ -8,7 +8,7 @@ import ConnectionStatus from './components/ConnectionStatus'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import CustomersPage from './pages/CustomersPage'
-import ShipmentsPage from './pages/ShipmentsPage'
+import NewShipmentsPage from './pages/NewShipmentsPage'
 import InvoicesPage from './pages/InvoicesPage'
 import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
@@ -35,7 +35,7 @@ function App() {
                     <Routes>
                       <Route path="/dashboard" element={<DashboardPage />} />
                       <Route path="/customers" element={<CustomersPage />} />
-                      <Route path="/shipments" element={<ShipmentsPage />} />
+                      <Route path="/shipments" element={<NewShipmentsPage />} />
                       <Route path="/invoices" element={<InvoicesPage />} />
                       <Route path="/payments" element={<PaymentsPage />} />
                       <Route path="/reports" element={<ReportsPage />} />

@@ -1,5 +1,5 @@
 import React from "react"
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 const Dialog = React.forwardRef(({ className, open, onOpenChange, children, ...props }, ref) => {
   if (!open) return null
@@ -72,10 +72,28 @@ const DialogDescription = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogDescription.displayName = "DialogDescription"
 
+const DialogTrigger = React.forwardRef(({ className, children, asChild = false, ...props }, ref) => {
+  if (asChild) {
+    return React.cloneElement(children, { ref, ...props })
+  }
+  
+  return (
+    <button
+      ref={ref}
+      className={cn("", className)}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+})
+DialogTrigger.displayName = "DialogTrigger"
+
 export {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 }

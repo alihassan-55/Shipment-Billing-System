@@ -3,6 +3,11 @@ import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -14,6 +19,7 @@ import shipperRoutes from './routes/shipperRoutes.js';
 import consigneeRoutes from './routes/consigneeRoutes.js';
 import serviceProviderRoutes from './routes/serviceProviderRoutes.js';
 import newShipmentRoutes from './routes/newShipmentRoutes.js';
+import shipmentInvoiceRoutes from './routes/shipmentInvoiceRoutes.js';
 import { checkDatabaseConnection } from './db/client.js';
 
 dotenv.config();
@@ -24,6 +30,9 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(morgan('dev'));
+
+// Serve static files (PDFs)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.get('/api/health', async (_req, res) => {
   const dbConnected = await checkDatabaseConnection();
@@ -45,6 +54,7 @@ app.use('/api/bulk-import', bulkImportRoutes);
 app.use('/api/shippers', shipperRoutes);
 app.use('/api/consignees', consigneeRoutes);
 app.use('/api/service-providers', serviceProviderRoutes);
+app.use('/api', shipmentInvoiceRoutes);
 
 // 404 handler
 app.use((req, res, _next) => {

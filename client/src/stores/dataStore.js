@@ -218,6 +218,16 @@ export const useDataStore = create((set, get) => ({
       set({ invoices: [] })
     }
   },
+
+  fetchInvoice: async (invoiceId) => {
+    try {
+      const response = await axios.get(`/invoices/${invoiceId}`)
+      return response.data
+    } catch (error) {
+      console.error('Failed to fetch invoice:', error)
+      throw error
+    }
+  },
   
   createInvoice: async (invoiceData) => {
     try {

@@ -8,123 +8,88 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
+  id           String      @id @default(uuid())
   name         String
-  email        String   @unique
+  email        String      @unique
   passwordHash String
   role         String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  shipmentsCreated Shipment[] @relation("ShipmentsCreatedBy")
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  shipments    shipments[]
 }
 
 model Customer {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   company   String?
   email     String?
   phone     String?
-  createdAt DateTime @default(now())
-  invoices  Invoice[]
+  createdAt DateTime  @default(now())
   addresses Address[]
-  shipmentsSent Shipment[] @relation("Sender")
-  shipmentsReceived Shipment[] @relation("Receiver")
+  invoices  Invoice[]
 }
 
 model Address {
-  id          String   @id @default(uuid())
-  customer    Customer @relation(fields: [customerId], references: [id])
-  customerId  String
-  type        String
-  line1       String
-  line2       String?
-  city        String
-  state       String?
-  postalCode  String?
-  country     String
-  pickupShipments Shipment[] @relation("PickupAddress")
-  deliveryShipments Shipment[] @relation("DeliveryAddress")
-}
-
-model Shipment {
-  id               String   @id @default(uuid())
-  waybill          String   @unique
-  sender           Customer @relation("Sender", fields: [senderId], references: [id])
-  senderId         String
-  receiver         Customer @relation("Receiver", fields: [receiverId], references: [id])
-  receiverId       String
-  pickupAddress    Address  @relation("PickupAddress", fields: [pickupAddressId], references: [id])
-  pickupAddressId  String
-  deliveryAddress  Address  @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
-  deliveryAddressId String
-  weight           Float
-  dimensions       String?
-  serviceType      String
-  declaredValue    Float?
-  codAmount        Float?
-  status           String
-  bookedAt         DateTime @default(now())
-  expectedDelivery DateTime?
-  deliveredAt      DateTime?
-  invoice          Invoice? @relation(fields: [invoiceId], references: [id])
-  invoiceId        String?
-  events           ShipmentEvent[]
-  lineItems        InvoiceLineItem[]
-  createdBy        User     @relation("ShipmentsCreatedBy", fields: [createdById], references: [id])
-  createdById      String
+  id         String   @id @default(uuid())
+  customerId String
+  type       String
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String?
+  country    String
+  customer   Customer @relation(fields: [customerId], references: [id])
 }
 
 model ShipmentEvent {
-  id          String   @id @default(uuid())
-  shipment    Shipment @relation(fields: [shipmentId], references: [id])
+  id          String    @id @default(uuid())
   shipmentId  String
   eventType   String
   description String?
   location    String?
   occurredAt  DateTime
   recordedBy  String?
+  shipment    shipments @relation(fields: [shipmentId], references: [id])
 }
 
 model Invoice {
   id            String            @id @default(uuid())
   invoiceNumber String            @unique
-  customer      Customer          @relation(fields: [customerId], references: [id])
   customerId    String
   issuedDate    DateTime
   dueDate       DateTime?
   subtotal      Float
   tax           Float
   total         Float
-  currency      String @default("USD")
+  currency      String            @default("USD")
   status        String
   pdfPath       String?
+  customer      Customer          @relation(fields: [customerId], references: [id])
   lineItems     InvoiceLineItem[]
   payments      Payment[]
-  shipments     Shipment[]
 }
 
 model InvoiceLineItem {
-  id         String   @id @default(uuid())
-  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
-  invoiceId  String
-  shipment   Shipment @relation(fields: [shipmentId], references: [id])
-  shipmentId String
+  id          String  @id @default(uuid())
+  invoiceId   String
   description String?
   quantity    Int     @default(1)
   unitPrice   Float
   total       Float
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
 }
 
 model Payment {
   id          String   @id @default(uuid())
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
   invoiceId   String
   paymentDate DateTime
   amount      Float
   method      String
   reference   String?
   receivedBy  String?
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
 }
 
 model AuditLog {
@@ -136,4 +101,164 @@ model AuditLog {
   oldData    Json?
   newData    Json?
   createdAt  DateTime @default(now())
+}
+
+model billing_invoices {
+  id                String    @id
+  shipmentId        String    @unique
+  ratePerKg         Float?
+  totalRate         Float?
+  eFormCharges      Float     @default(0)
+  remoteAreaCharges Float     @default(0)
+  boxCharges        Float     @default(0)
+  grandTotal        Float
+  paymentMethod     String
+  customerAccountId String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+  shipments         shipments @relation(fields: [shipmentId], references: [id])
+}
+
+model consignees {
+  id         String      @id
+  personName String
+  phone      String
+  address    String
+  city       String
+  country    String
+  email      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime
+  shipments  shipments[]
+}
+
+model ledger_entries {
+  id                String   @id
+  shipmentId        String
+  customerAccountId String
+  amount            Float
+  currency          String   @default("PKR")
+  status            String   @default("Pending")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime
+}
+
+model product_invoice_items {
+  id          String    @id
+  shipmentId  String
+  boxIndex    Int
+  description String
+  hsCode      String
+  pieces      Int
+  unitValue   Float
+  total       Float
+  createdAt   DateTime  @default(now())
+  shipments   shipments @relation(fields: [shipmentId], references: [id])
+}
+
+model service_providers {
+  id        String      @id
+  name      String      @unique
+  createdAt DateTime    @default(now())
+  shipments shipments[]
+}
+
+model shipment_boxes {
+  id                 String    @id
+  shipmentId         String
+  index              Int
+  lengthCm           Float
+  widthCm            Float
+  heightCm           Float
+  volumetricWeightKg Float
+  actualWeightKg     Float?
+  createdAt          DateTime  @default(now())
+  shipments          shipments @relation(fields: [shipmentId], references: [id])
+}
+
+model shipments {
+  id                    String                  @id
+  referenceNumber       String                  @unique
+  airwayBillNumber      String?
+  serviceProviderId     String
+  shipperId             String
+  consigneeId           String
+  terms                 String
+  actualWeightKg        Float
+  volumeWeightKg        Float
+  chargedWeightKg       Float
+  customsValue          Float?
+  status                String                  @default("Draft")
+  bookedAt              DateTime                @default(now())
+  expectedDelivery      DateTime?
+  deliveredAt           DateTime?
+  createdById           String
+  updatedAt             DateTime
+  events                ShipmentEvent[]
+  billing_invoices      billing_invoices?
+  product_invoice_items product_invoice_items[]
+  shipment_boxes        shipment_boxes[]
+  shipment_invoices      shipment_invoices[]
+  consignees            consignees              @relation(fields: [consigneeId], references: [id])
+  User                  User                    @relation(fields: [createdById], references: [id])
+  service_providers     service_providers       @relation(fields: [serviceProviderId], references: [id])
+  shippers              shippers                @relation(fields: [shipperId], references: [id])
+}
+
+model shipment_invoices {
+  id                String                      @id @default(uuid())
+  invoiceNumber     String                      @unique
+  type              InvoiceType
+  shipmentId        String
+  customerAccountId String?
+  subtotal          Float
+  tax               Float                       @default(0)
+  total             Float
+  currency          String                      @default("PKR")
+  status            InvoiceStatus               @default(Draft)
+  postedLedgerEntryId String?
+  issuedAt          DateTime                    @default(now())
+  pdfUrl            String?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  shipments         shipments                   @relation(fields: [shipmentId], references: [id])
+  lineItems         shipment_invoice_line_items[]
+}
+
+model shipment_invoice_line_items {
+  id                String              @id @default(uuid())
+  shipmentInvoiceId String
+  description       String
+  quantity          Int?
+  unitPrice         Float?
+  total             Float
+  createdAt         DateTime            @default(now())
+  shipment_invoices shipment_invoices   @relation(fields: [shipmentInvoiceId], references: [id])
+}
+
+enum InvoiceType {
+  DECLARED_VALUE
+  BILLING
+}
+
+enum InvoiceStatus {
+  Draft
+  Confirmed
+  Paid
+  Posted
+}
+
+model shippers {
+  id         String      @id
+  personName String
+  phone      String
+  address    String
+  city       String
+  country    String      @default("Pakistan")
+  email      String?
+  cnic       String?
+  ntn        String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime
+  shipments  shipments[]
 }

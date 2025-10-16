@@ -1,0 +1,104 @@
+{
+    "project_directives": {
+      "name": "API Consistency and Performance Rules",
+      "version": "1.0.0",
+      "purpose": "Ensure consistency, prevent name changes, improve API performance, and maintain lightweight documentation practices."
+    },
+  
+    "rules": {
+      "naming_and_consistency": {
+        "description": "All existing names, routes, and identifiers must stay consistent across all files.",
+        "guidelines": [
+          "Do not rename existing API endpoints, functions, variables, imports, or models.",
+          "Use exact existing endpoint paths (e.g., /api/addPolicy must not become /api/createPolicy).",
+          "Before creating new APIs, verify if a similar function or route already exists.",
+          "Maintain consistent naming between controllers, routes, and models.",
+          "Never duplicate an existing function under a different name unless refactoring is explicitly approved."
+        ]
+      },
+  
+      "context_awareness": {
+        "description": "Always analyze related files before making edits.",
+        "guidelines": [
+          "Before writing code, scan related files (e.g., routes ↔ controllers ↔ models).",
+          "Maintain logical structure — do not restructure folder hierarchy or import paths.",
+          "If adding a new function, reference how similar logic is handled in the project."
+        ]
+      },
+  
+      "api_performance_practices": {
+        "description": "Prevent excessive API load and ensure scalability.",
+        "guidelines": [
+          "Use pagination or limit/offset for large data queries.",
+          "Avoid fetching unnecessary fields — use select or projection.",
+          "Implement caching where appropriate (e.g., Redis, in-memory).",
+          "Reuse database connections; do not create new connections per request.",
+          "Use async/await with proper error handling to avoid blocking calls.",
+          "Validate and sanitize input data before database queries.",
+          "Handle errors gracefully with consistent structure (status, message, data)."
+        ]
+      },
+  
+      "code_modification_rules": {
+        "description": "Modify internal logic safely without breaking existing APIs.",
+        "guidelines": [
+          "Only update logic, not identifiers or API structures.",
+          "Verify all imports and function references after modification.",
+          "Ensure backward compatibility when refactoring any endpoint or function.",
+          "Run test or lint checks after changes to confirm no breaking issues."
+        ]
+      },
+  
+      "documentation_practices": {
+        "description": "Maintain small, file-specific documentation for context and clarity.",
+        "guidelines": [
+          "At the top of each file, add a short comment block with the file's purpose.",
+          "For each API, add a JSDoc-style comment including endpoint, method, purpose, and related files.",
+          "Document any parameters and expected responses clearly in the function comment.",
+          "If new API is created, also mention reason and connection with other modules."
+        ],
+        "example": {
+          "jsdoc": [
+            "/**",
+            " * @file policyController.js",
+            " * @description Handles SNMP and Policy management APIs.",
+            " * @related /routes/policyRoutes.js",
+            " */",
+            "",
+            "/**",
+            " * @route POST /api/addPolicy",
+            " * @description Adds new bandwidth policy for a device",
+            " * @param {Object} req - Express request object",
+            " * @param {Object} res - Express response object",
+            " * @returns {Object} success or error response",
+            " */"
+          ]
+        }
+      },
+  
+      "review_and_creation_checks": {
+        "description": "Verify before creating or changing any logic.",
+        "guidelines": [
+          "Before creating a new API, check if a similar function already exists.",
+          "If adding something new, document why it’s needed and how it fits with existing flow.",
+          "Do not create endpoints or models without verifying use case or database impact.",
+          "When unsure, prefer extending existing functionality over creating new ones."
+        ]
+      }
+    },
+  
+    "developer_practice": {
+      "steps_before_editing": [
+        "1. Read the related controller, route, and model files.",
+        "2. Search project for function or endpoint names to avoid duplication.",
+        "3. Review this config and follow naming consistency strictly.",
+        "4. Add/update brief documentation for clarity."
+      ],
+      "steps_before_committing": [
+        "1. Run all tests or manually test endpoints.",
+        "2. Check that no endpoint name, variable, or import changed unintentionally.",
+        "3. Review API performance (no unnecessary loops, DB hits, or payloads)."
+      ]
+    }
+  }
+  

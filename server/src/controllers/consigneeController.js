@@ -12,7 +12,7 @@ export async function getConsignees(req, res) {
       ]
     } : {};
 
-    const consignees = await prisma.consignee.findMany({
+    const consignees = await prisma.consignees.findMany({
       where,
       orderBy: { personName: 'asc' },
       take: 20
@@ -35,7 +35,7 @@ export async function createConsignee(req, res) {
   }
 
   try {
-    const consignee = await prisma.consignee.create({
+    const consignee = await prisma.consignees.create({
       data: {
         personName,
         phone,
@@ -57,7 +57,7 @@ export async function getConsignee(req, res) {
   const { id } = req.params;
 
   try {
-    const consignee = await prisma.consignee.findUnique({
+    const consignee = await prisma.consignees.findUnique({
       where: { id }
     });
 

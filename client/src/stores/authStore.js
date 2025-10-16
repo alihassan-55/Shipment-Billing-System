@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:3001/api'
+// Dynamic API base URL - use current host for network access
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3001/api`
 
 // Configure axios defaults
 axios.defaults.baseURL = API_BASE_URL

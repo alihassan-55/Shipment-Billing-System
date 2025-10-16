@@ -114,7 +114,7 @@ export async function createShipment(req, res) {
     }
 
     // Check for duplicate reference number
-    const existingShipment = await prisma.shipment.findUnique({
+    const existingShipment = await prisma.shipments.findUnique({
       where: { referenceNumber: finalReferenceNumber }
     });
 
@@ -137,7 +137,7 @@ export async function createShipment(req, res) {
       createdById: req.user.sub
     });
     
-    const shipment = await prisma.shipment.create({
+    const shipment = await prisma.shipments.create({
       data: {
         referenceNumber: finalReferenceNumber,
         serviceProviderId,
@@ -150,10 +150,10 @@ export async function createShipment(req, res) {
         customsValue: customsValue > 0 ? customsValue : null,
         status,
         createdById: req.user.sub,
-        boxes: {
+        shipment_boxes: {
           create: processedBoxes
         },
-        productInvoiceItems: productInvoice?.items ? {
+        product_invoice_items: productInvoice?.items ? {
           create: productInvoice.items.map(item => ({
             boxIndex: parseInt(item.boxIndex),
             description: item.description,
@@ -163,7 +163,7 @@ export async function createShipment(req, res) {
             total: parseInt(item.pieces) * parseFloat(item.unitValue)
           }))
         } : undefined,
-        billingInvoice: billingInvoice ? {
+        billing_invoices: billingInvoice ? {
           create: {
             ratePerKg: billingInvoice.ratePerKg ? parseFloat(billingInvoice.ratePerKg) : null,
             totalRate: billingInvoice.totalRate ? parseFloat(billingInvoice.totalRate) : null,
@@ -177,13 +177,13 @@ export async function createShipment(req, res) {
         } : undefined
       },
       include: {
-        serviceProvider: true,
-        shipper: true,
-        consignee: true,
-        boxes: true,
-        productInvoiceItems: true,
-        billingInvoice: true,
-        createdBy: {
+        service_providers: true,
+        shippers: true,
+        consignees: true,
+        shipment_boxes: true,
+        product_invoice_items: true,
+        billing_invoices: true,
+        User: {
           select: { id: true, name: true, email: true }
         }
       }
@@ -239,24 +239,24 @@ export async function getShipments(req, res) {
 
   try {
     const [shipments, total] = await Promise.all([
-      prisma.shipment.findMany({
+      prisma.shipments.findMany({
         where,
         skip,
         take: parseInt(limit),
         include: {
-          serviceProvider: true,
-          shipper: true,
-          consignee: true,
-          boxes: true,
-          productInvoiceItems: true,
-          billingInvoice: true,
-          createdBy: {
+          service_providers: true,
+          shippers: true,
+          consignees: true,
+          shipment_boxes: true,
+          product_invoice_items: true,
+          billing_invoices: true,
+          User: {
             select: { id: true, name: true, email: true }
           }
         },
         orderBy: { bookedAt: 'desc' },
       }),
-      prisma.shipment.count({ where }),
+      prisma.shipments.count({ where }),
     ]);
 
     return res.json({
@@ -278,7 +278,7 @@ export async function getShipment(req, res) {
   const { id } = req.params;
 
   try {
-    const shipment = await prisma.shipment.findUnique({
+    const shipment = await prisma.shipments.findUnique({
       where: { id },
       include: {
         serviceProvider: true,
@@ -288,7 +288,7 @@ export async function getShipment(req, res) {
         productInvoiceItems: true,
         billingInvoice: true,
         events: { orderBy: { occurredAt: 'desc' } },
-        createdBy: {
+        User: {
           select: { id: true, name: true, email: true }
         }
       },
@@ -325,17 +325,17 @@ export async function updateShipment(req, res) {
   });
 
   try {
-    const shipment = await prisma.shipment.update({
+    const shipment = await prisma.shipments.update({
       where: { id },
       data: filteredUpdates,
       include: {
-        serviceProvider: true,
-        shipper: true,
-        consignee: true,
-        boxes: true,
-        productInvoiceItems: true,
-        billingInvoice: true,
-        createdBy: {
+        service_providers: true,
+        shippers: true,
+        consignees: true,
+        shipment_boxes: true,
+        product_invoice_items: true,
+        billing_invoices: true,
+        User: {
           select: { id: true, name: true, email: true }
         }
       },
@@ -358,14 +358,14 @@ export async function updateAirwayBill(req, res) {
   }
 
   try {
-    const shipment = await prisma.shipment.update({
+    const shipment = await prisma.shipments.update({
       where: { id },
       data: { airwayBillNumber },
       include: {
         serviceProvider: true,
         shipper: true,
         consignee: true,
-        createdBy: {
+        User: {
           select: { id: true, name: true, email: true }
         }
       },
@@ -386,7 +386,7 @@ export async function addShipmentEvent(req, res) {
   if (!eventType) return res.status(400).json({ error: 'Event type required' });
 
   try {
-    const event = await prisma.shipmentEvent.create({
+    const event = await prisma.ShipmentEvent.create({
       data: {
         shipmentId: id,
         eventType,
@@ -401,5 +401,46 @@ export async function addShipmentEvent(req, res) {
   } catch (error) {
     console.error('Error adding shipment event:', error);
     return res.status(500).json({ error: 'Failed to add event' });
+  }
+}
+
+export async function confirmShipment(req, res) {
+  const { id } = req.params;
+
+  try {
+    // Update shipment status to Confirmed
+    const shipment = await prisma.shipments.update({
+      where: { id },
+      data: { status: 'Confirmed' },
+      include: {
+        service_providers: true,
+        shippers: true,
+        consignees: true,
+        shipment_boxes: true,
+        product_invoice_items: true,
+        billing_invoices: true,
+        User: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    // Import the invoice service
+    const { ShipmentInvoiceService } = await import('../services/shipmentInvoiceService.js');
+    
+    // Create invoices for the confirmed shipment
+    const invoices = await ShipmentInvoiceService.createForShipment(id);
+
+    return res.json({
+      shipment,
+      invoices: {
+        declaredValueInvoice: invoices.declaredValueInvoice,
+        billingInvoice: invoices.billingInvoice
+      }
+    });
+  } catch (error) {
+    console.error('Shipment confirmation error:', error);
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Shipment not found' });
+    return res.status(500).json({ error: 'Failed to confirm shipment: ' + error.message });
   }
 }
