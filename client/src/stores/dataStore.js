@@ -208,12 +208,15 @@ export const useDataStore = create((set, get) => ({
   fetchInvoices: async (params = {}) => {
     set({ invoicesLoading: true })
     try {
+      console.log('Fetching invoices with params:', params)
       const response = await axios.get('/invoices', { params })
-      console.log('Invoices response:', response.data)
+      console.log('Invoices API response:', response.data)
+      console.log('Invoices count:', response.data.invoices?.length || 0)
       set({ invoices: response.data.invoices || [], invoicesLoading: false })
     } catch (error) {
       set({ invoicesLoading: false })
       console.error('Failed to fetch invoices:', error)
+      console.error('Error response:', error.response?.data)
       // Set empty array on error to prevent undefined issues
       set({ invoices: [] })
     }

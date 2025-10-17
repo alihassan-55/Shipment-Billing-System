@@ -6,6 +6,7 @@ import {
   getShipment,
   updateShipment,
   updateAirwayBill,
+  getAirwayBillStatus,
   addShipmentEvent
 } from '../controllers/newShipmentController.js';
 
@@ -28,6 +29,9 @@ router.patch('/:id', updateShipment);
 
 // PATCH /api/shipments/:id/airway-bill - Update airway bill (late-night update)
 router.patch('/:id/airway-bill', updateAirwayBill);
+
+// GET /api/shipments/:id/airway-bill/status - Get airway bill status
+router.get('/:id/airway-bill/status', getAirwayBillStatus);
 
 // POST /api/shipments/:id/events - Add shipment event
 router.post('/:id/events', addShipmentEvent);

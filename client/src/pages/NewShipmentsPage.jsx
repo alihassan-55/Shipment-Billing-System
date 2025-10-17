@@ -27,6 +27,7 @@ const ShipmentsPage = () => {
   const [shipments, setShipments] = useState([]);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(false);
+  const [airwayBillUpdated, setAirwayBillUpdated] = useState(false);
   const { toast } = useToast();
 
   // Load shipments
@@ -115,7 +116,8 @@ const ShipmentsPage = () => {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to update airway bill');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update airway bill');
       }
       
       toast({
@@ -123,12 +125,15 @@ const ShipmentsPage = () => {
         description: "Airway bill updated successfully",
       });
       
+      // Set the airway bill as updated to disable the input
+      setAirwayBillUpdated(true);
+      
       // Reload shipments to show updated data
       loadShipments();
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to update airway bill",
+        description: error.message || "Failed to update airway bill",
         variant: "destructive"
       });
     }
@@ -317,8 +322,8 @@ const ShipmentsPage = () => {
                         <TableCell>{shipment.service_providers?.name}</TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{shipment.shippers?.personName}</div>
-                            <div className="text-sm text-gray-600">{shipment.shippers?.city}</div>
+                            <div className="font-medium">{shipment.Customer?.personName}</div>
+                            <div className="text-sm text-gray-600">{shipment.Customer?.city}</div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -348,6 +353,8 @@ const ShipmentsPage = () => {
                               size="sm"
                               onClick={() => {
                                 setSelectedShipment(shipment);
+                                // Reset airway bill update state when selecting a new shipment
+                                setAirwayBillUpdated(!!shipment.airwayBillNumber);
                                 setIsDetailDialogOpen(true);
                               }}
                             >
@@ -498,40 +505,40 @@ const ShipmentsPage = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-600">Name</label>
-                      <p className="text-lg">{selectedShipment.shippers?.personName}</p>
+                      <p className="text-lg">{selectedShipment.Customer?.personName}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Phone</label>
-                      <p className="text-lg">{selectedShipment.shippers?.phone}</p>
+                      <p className="text-lg">{selectedShipment.Customer?.phone}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Address</label>
-                      <p className="text-lg">{selectedShipment.shippers?.address}</p>
+                      <p className="text-lg">{selectedShipment.Customer?.address}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">City</label>
-                      <p className="text-lg">{selectedShipment.shippers?.city}</p>
+                      <p className="text-lg">{selectedShipment.Customer?.city}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Country</label>
-                      <p className="text-lg">{selectedShipment.shippers?.country}</p>
+                      <p className="text-lg">{selectedShipment.Customer?.country}</p>
                     </div>
-                    {selectedShipment.shippers?.email && (
+                    {selectedShipment.Customer?.email && (
                       <div>
                         <label className="text-sm font-medium text-gray-600">Email</label>
-                        <p className="text-lg">{selectedShipment.shippers?.email}</p>
+                        <p className="text-lg">{selectedShipment.Customer?.email}</p>
                       </div>
                     )}
-                    {selectedShipment.shippers?.cnic && (
+                    {selectedShipment.Customer?.cnic && (
                       <div>
                         <label className="text-sm font-medium text-gray-600">CNIC</label>
-                        <p className="text-lg">{selectedShipment.shippers?.cnic}</p>
+                        <p className="text-lg">{selectedShipment.Customer?.cnic}</p>
                       </div>
                     )}
-                    {selectedShipment.shippers?.ntn && (
+                    {selectedShipment.Customer?.ntn && (
                       <div>
                         <label className="text-sm font-medium text-gray-600">NTN</label>
-                        <p className="text-lg">{selectedShipment.shippers?.ntn}</p>
+                        <p className="text-lg">{selectedShipment.Customer?.ntn}</p>
                       </div>
                     )}
                   </div>
@@ -746,6 +753,8 @@ const ShipmentsPage = () => {
                       placeholder="Enter airway bill number"
                       defaultValue={selectedShipment.airwayBillNumber || ''}
                       id="airwayBillInput"
+                      disabled={airwayBillUpdated}
+                      className={airwayBillUpdated ? "bg-gray-100 cursor-not-allowed" : ""}
                     />
                     <Button
                       onClick={() => {
@@ -755,10 +764,17 @@ const ShipmentsPage = () => {
                           handleAirwayBillUpdate(selectedShipment.id, airwayBillNumber);
                         }
                       }}
+                      disabled={airwayBillUpdated}
+                      className={airwayBillUpdated ? "bg-gray-400 cursor-not-allowed" : ""}
                     >
-                      Update
+                      {airwayBillUpdated ? "Updated" : "Update"}
                     </Button>
                   </div>
+                  {airwayBillUpdated && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      ✓ Airway bill has been updated and cannot be modified
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>

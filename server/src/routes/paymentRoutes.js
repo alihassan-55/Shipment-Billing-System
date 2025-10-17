@@ -7,6 +7,7 @@ const router = Router();
 
 router.use(requireAuth);
 
+// Payment management routes
 router.post('/', requireRoles('admin', 'accountant'), recordPayment);
 router.get('/', getPayments);
 

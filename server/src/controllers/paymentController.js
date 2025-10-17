@@ -1,19 +1,26 @@
+// File: paymentController.js
+// Purpose: Enhanced payment management with automatic invoice updates and ledger tracking
+// Dependencies: prisma client, ledgerService
+
 import { prisma } from '../db/client.js';
+import crypto from 'crypto';
 
 export async function recordPayment(req, res) {
-  const { invoiceId, paymentDate, amount, method, reference } = req.body;
+  const { invoiceId, amount, paymentType, notes, reference, receivedBy } = req.body;
 
-  if (!invoiceId || !amount || !method) {
-    return res.status(400).json({ error: 'Invoice ID, amount, and method required' });
+  if (!invoiceId || !amount || !paymentType) {
+    return res.status(400).json({ error: 'Invoice ID, amount, and payment type are required' });
   }
 
   try {
-    // Start transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Get invoice with payments
+      // Get invoice with customer
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        include: { payments: true },
+        include: { 
+          payments: true,
+          customer: true
+        },
       });
 
       if (!invoice) {
@@ -23,55 +30,98 @@ export async function recordPayment(req, res) {
       // Create payment
       const payment = await tx.payment.create({
         data: {
+          id: crypto.randomUUID(),
           invoiceId,
-          paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+          customerId: invoice.customerId,
           amount: parseFloat(amount),
-          method,
+          paymentType,
+          notes,
           reference,
-          receivedBy: req.user.sub,
+          receivedBy: receivedBy || req.user?.sub || req.user?.id,
+          createdAt: new Date(),
+          updatedAt: new Date()
         },
       });
 
       // Calculate new payment total
-      const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+      const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0) + parseFloat(amount);
       const outstanding = invoice.total - totalPaid;
 
       // Update invoice status
-      let newStatus = 'Unpaid';
+      let newStatus = 'UNPAID';
       if (outstanding <= 0) {
-        newStatus = 'Paid';
+        newStatus = 'PAID';
       } else if (totalPaid > 0) {
-        newStatus = 'Partial';
+        newStatus = 'PARTIAL';
       }
 
-      await tx.invoice.update({
+      // Update invoice with new totals
+      const updatedInvoice = await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: newStatus },
+        data: { 
+          amountPaid: totalPaid,
+          balanceDue: outstanding,
+          status: newStatus,
+          updatedAt: new Date()
+        },
+        include: {
+          customer: true,
+          payments: true,
+          lineItems: true
+        }
+      });
+
+      // Create ledger entry for payment
+      await tx.ledgerEntry.create({
+        data: {
+          id: crypto.randomUUID(),
+          customerId: invoice.customerId,
+          referenceId: payment.id,
+          entryType: 'PAYMENT',
+          description: `Payment received for invoice ${invoice.invoiceNumber}`,
+          debit: 0,
+          credit: parseFloat(amount),
+          balanceAfter: invoice.customer.ledgerBalance - parseFloat(amount),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+
+      // Update customer ledger balance
+      await tx.customer.update({
+        where: { id: invoice.customerId },
+        data: {
+          ledgerBalance: invoice.customer.ledgerBalance - parseFloat(amount),
+          updatedAt: new Date()
+        }
       });
 
       return {
         payment,
-        invoiceStatus: newStatus,
+        invoice: updatedInvoice,
         totalPaid,
         outstanding,
+        status: newStatus
       };
     });
 
     return res.status(201).json(result);
   } catch (error) {
+    console.error('Error recording payment:', error);
     return res.status(400).json({ error: error.message || 'Failed to record payment' });
   }
 }
 
 export async function getPayments(req, res) {
-  const { invoiceId, from, to, page = 1, limit = 20 } = req.query;
+  const { invoiceId, customerId, from, to, page = 1, limit = 20 } = req.query;
 
   const where = {};
   if (invoiceId) where.invoiceId = invoiceId;
+  if (customerId) where.customerId = customerId;
   if (from || to) {
-    where.paymentDate = {};
-    if (from) where.paymentDate.gte = new Date(from);
-    if (to) where.paymentDate.lte = new Date(to);
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from);
+    if (to) where.createdAt.lte = new Date(to);
   }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -88,8 +138,9 @@ export async function getPayments(req, res) {
               customer: true,
             },
           },
+          customer: true
         },
-        orderBy: { paymentDate: 'desc' },
+        orderBy: { createdAt: 'desc' },
       }),
       prisma.payment.count({ where }),
     ]);

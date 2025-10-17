@@ -14,13 +14,15 @@ import userRoutes from './routes/userRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import invoiceRoutes from './routes/invoiceRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import ledgerRoutes from './routes/ledgerRoutes.js';
 import bulkImportRoutes from './routes/bulkImportRoutes.js';
-import shipperRoutes from './routes/shipperRoutes.js';
 import consigneeRoutes from './routes/consigneeRoutes.js';
 import serviceProviderRoutes from './routes/serviceProviderRoutes.js';
 import newShipmentRoutes from './routes/newShipmentRoutes.js';
 import shipmentInvoiceRoutes from './routes/shipmentInvoiceRoutes.js';
 import { checkDatabaseConnection } from './db/client.js';
+import { searchShippersByPhone } from './controllers/customerController.js';
+import { requireAuth } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -50,8 +52,10 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/shipments', newShipmentRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/ledger', ledgerRoutes);
 app.use('/api/bulk-import', bulkImportRoutes);
-app.use('/api/shippers', shipperRoutes);
+app.use('/api/shippers', customerRoutes); // Map shippers to customer routes
+app.use('/api/shippers/search-by-phone', requireAuth, searchShippersByPhone); // Direct route for phone search
 app.use('/api/consignees', consigneeRoutes);
 app.use('/api/service-providers', serviceProviderRoutes);
 app.use('/api', shipmentInvoiceRoutes);

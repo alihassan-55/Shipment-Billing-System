@@ -1,5 +1,6 @@
 import { prisma } from '../db/client.js';
 import { generateInvoicePDF } from '../utils/pdfGenerator.js';
+import crypto from 'crypto';
 
 // Invoice number generation service
 class InvoiceNumberService {
@@ -34,7 +35,7 @@ export class ShipmentInvoiceService {
       const shipment = await tx.shipments.findUnique({
         where: { id: shipmentId },
         include: {
-          shippers: true,
+          Customer: true,
           consignees: true,
           service_providers: true,
           product_invoice_items: true,
@@ -47,7 +48,7 @@ export class ShipmentInvoiceService {
         throw new Error('Shipment not found');
       }
 
-      if (shipment.status !== 'Confirmed') {
+      if (shipment.status !== 'CONFIRMED') {
         throw new Error('Can only create invoices for confirmed shipments');
       }
 
@@ -69,6 +70,9 @@ export class ShipmentInvoiceService {
       
       // Create Billing Invoice
       const billingInvoice = await this.createBillingInvoice(shipment, tx);
+
+      // Create main Invoice entry for customer ledger
+      await this.createMainInvoiceEntry(shipment, billingInvoice, tx);
 
       return {
         declaredValueInvoice,
@@ -99,13 +103,15 @@ export class ShipmentInvoiceService {
         tax: 0,
         total: declaredValue,
         currency: 'PKR',
-        status: 'Confirmed',
+        status: 'UNPAID',
         lineItems: {
           create: (shipment.product_invoice_items || []).map(item => ({
+            id: crypto.randomUUID(),
             description: item.description,
             quantity: item.pieces,
             unitPrice: item.unitValue,
-            total: item.pieces * item.unitValue
+            total: item.pieces * item.unitValue,
+            createdAt: new Date()
           }))
         }
       },
@@ -114,8 +120,12 @@ export class ShipmentInvoiceService {
       }
     });
 
-    // Generate PDF synchronously
-    const pdfPath = await this.generateInvoicePDF(invoice.id, 'DECLARED_VALUE', invoice);
+    // Generate PDF synchronously - pass shipment data
+    const invoiceWithShipment = {
+      ...invoice,
+      shipments: shipment
+    };
+    const pdfPath = await this.generateInvoicePDF(invoice.id, 'DECLARED_VALUE', invoiceWithShipment, tx);
 
     return invoice;
   }
@@ -138,45 +148,55 @@ export class ShipmentInvoiceService {
     // Base freight line
     if (billing.ratePerKg && billing.totalRate) {
       lineItems.push({
+        id: crypto.randomUUID(),
         description: `Freight (${shipment.chargedWeightKg}kg @ PKR ${billing.ratePerKg}/kg)`,
         quantity: shipment.chargedWeightKg,
         unitPrice: billing.ratePerKg,
-        total: billing.totalRate
+        total: billing.totalRate,
+        createdAt: new Date()
       });
     } else if (billing.totalRate) {
       lineItems.push({
+        id: crypto.randomUUID(),
         description: 'Freight',
         quantity: 1,
         unitPrice: billing.totalRate,
-        total: billing.totalRate
+        total: billing.totalRate,
+        createdAt: new Date()
       });
     }
 
     // Other charges
     if (billing.eFormCharges > 0) {
       lineItems.push({
+        id: crypto.randomUUID(),
         description: 'FORM E / I CHARGES',
         quantity: 1,
         unitPrice: billing.eFormCharges,
-        total: billing.eFormCharges
+        total: billing.eFormCharges,
+        createdAt: new Date()
       });
     }
 
     if (billing.remoteAreaCharges > 0) {
       lineItems.push({
+        id: crypto.randomUUID(),
         description: 'Remote area charges',
         quantity: 1,
         unitPrice: billing.remoteAreaCharges,
-        total: billing.remoteAreaCharges
+        total: billing.remoteAreaCharges,
+        createdAt: new Date()
       });
     }
 
     if (billing.boxCharges > 0) {
       lineItems.push({
+        id: crypto.randomUUID(),
         description: 'Box charges',
         quantity: 1,
         unitPrice: billing.boxCharges,
-        total: billing.boxCharges
+        total: billing.boxCharges,
+        createdAt: new Date()
       });
     }
 
@@ -186,10 +206,12 @@ export class ShipmentInvoiceService {
     
     if (Math.abs(adjustment) > 0.01) {
       lineItems.push({
+        id: crypto.randomUUID(),
         description: 'Adjustment',
         quantity: 1,
         unitPrice: adjustment,
-        total: adjustment
+        total: adjustment,
+        createdAt: new Date()
       });
     }
 
@@ -204,7 +226,7 @@ export class ShipmentInvoiceService {
         tax: 0,
         total: billing.grandTotal,
         currency: 'PKR',
-        status: billing.paymentMethod === 'Cash' ? 'Paid' : 'Confirmed',
+        status: billing.paymentMethod === 'Cash' ? 'PAID' : 'UNPAID',
         lineItems: {
           create: lineItems
         }
@@ -218,11 +240,14 @@ export class ShipmentInvoiceService {
     if (billing.paymentMethod === 'Credit' && billing.customerAccountId) {
       const ledgerEntry = await tx.ledger_entries.create({
         data: {
+          id: crypto.randomUUID(),
           shipmentId: shipment.id,
           customerAccountId: billing.customerAccountId,
           amount: billing.grandTotal,
           currency: 'PKR',
-          status: 'Pending'
+          status: 'Pending',
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       });
 
@@ -231,13 +256,17 @@ export class ShipmentInvoiceService {
         where: { id: invoice.id },
         data: { 
           postedLedgerEntryId: ledgerEntry.id,
-          status: 'Posted'
+          status: 'PAID'
         }
       });
     }
 
-    // Generate PDF synchronously
-    const pdfPath = await this.generateInvoicePDF(invoice.id, 'BILLING', invoice);
+    // Generate PDF synchronously - pass shipment data
+    const invoiceWithShipment = {
+      ...invoice,
+      shipments: shipment
+    };
+    const pdfPath = await this.generateInvoicePDF(invoice.id, 'BILLING', invoiceWithShipment, tx);
 
     return invoice;
   }
@@ -245,18 +274,19 @@ export class ShipmentInvoiceService {
   /**
    * Generate PDF for invoice
    */
-  static async generateInvoicePDF(invoiceId, type, invoiceData = null) {
+  static async generateInvoicePDF(invoiceId, type, invoiceData = null, tx = null) {
     try {
       let invoice = invoiceData;
       
       // If invoice data is not provided, fetch it from database
       if (!invoice) {
-        invoice = await prisma.shipment_invoices.findUnique({
+        const prismaClient = tx || prisma;
+        invoice = await prismaClient.shipment_invoices.findUnique({
           where: { id: invoiceId },
           include: {
             shipments: {
               include: {
-                shippers: true,
+                Customer: true,
                 consignees: true,
                 service_providers: true,
                 product_invoice_items: true,
@@ -275,8 +305,9 @@ export class ShipmentInvoiceService {
       // Generate PDF using existing PDF generator
       const pdfPath = await generateInvoicePDF(invoiceId, type, invoice);
       
-      // Update invoice with PDF URL
-      await prisma.shipment_invoices.update({
+      // Update invoice with PDF URL using the same transaction context
+      const prismaClient = tx || prisma;
+      await prismaClient.shipment_invoices.update({
         where: { id: invoiceId },
         data: { pdfUrl: pdfPath }
       });
@@ -314,5 +345,91 @@ export class ShipmentInvoiceService {
     }
 
     return await this.generateInvoicePDF(invoiceId, invoice.type);
+  }
+
+  /**
+   * Create main Invoice entry for customer ledger system
+   */
+  static async createMainInvoiceEntry(shipment, billingInvoice, tx) {
+    if (!shipment.Customer) {
+      throw new Error('Customer not found for shipment');
+    }
+
+    // Generate main invoice number
+    const invoiceNumber = await this.generateMainInvoiceNumber();
+    
+    // Create main invoice
+    const mainInvoice = await tx.invoice.create({
+      data: {
+        id: crypto.randomUUID(),
+        invoiceNumber,
+        customerId: shipment.customerId,
+        issuedDate: new Date(),
+        subtotal: billingInvoice.total,
+        tax: 0, // No tax for now
+        total: billingInvoice.total,
+        amountPaid: 0,
+        balanceDue: billingInvoice.total,
+        status: 'UNPAID',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    // Create line item for the shipment
+    await tx.invoiceLineItem.create({
+      data: {
+        id: crypto.randomUUID(),
+        invoiceId: mainInvoice.id,
+        description: `Shipment ${shipment.referenceNumber} - ${billingInvoice.invoiceNumber}`,
+        quantity: 1,
+        unitPrice: billingInvoice.total,
+        total: billingInvoice.total
+      }
+    });
+
+    // Create ledger entry
+    await tx.ledgerEntry.create({
+      data: {
+        id: crypto.randomUUID(),
+        customerId: shipment.customerId,
+        referenceId: mainInvoice.id,
+        entryType: 'INVOICE',
+        description: `Invoice ${invoiceNumber} created for shipment ${shipment.referenceNumber}`,
+        debit: billingInvoice.total,
+        credit: 0,
+        balanceAfter: shipment.Customer.ledgerBalance + billingInvoice.total,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    // Update customer ledger balance
+    await tx.customer.update({
+      where: { id: shipment.customerId },
+      data: {
+        ledgerBalance: shipment.Customer.ledgerBalance + billingInvoice.total,
+        updatedAt: new Date()
+      }
+    });
+
+    return mainInvoice;
+  }
+
+  /**
+   * Generate unique main invoice number
+   */
+  static async generateMainInvoiceNumber() {
+    const year = new Date().getFullYear();
+    const count = await prisma.invoice.count({
+      where: {
+        invoiceNumber: {
+          startsWith: `INV-${year}-`
+        }
+      }
+    });
+    
+    const nextNumber = (count + 1).toString().padStart(6, '0');
+    return `INV-${year}-${nextNumber}`;
   }
 }

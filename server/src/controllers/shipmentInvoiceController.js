@@ -119,7 +119,7 @@ export async function updateInvoiceStatus(req, res) {
   const { id } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ['Draft', 'Confirmed', 'Paid', 'Posted'];
+  const validStatuses = ['DRAFT', 'UNPAID', 'PARTIAL', 'PAID'];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ 
       error: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
@@ -149,4 +149,5 @@ export async function updateInvoiceStatus(req, res) {
     });
   }
 }
+
 

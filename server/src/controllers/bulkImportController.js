@@ -110,7 +110,7 @@ export async function bulkImportShipments(req, res) {
             status: 'Pending',
             bookedAt: row.shipment_date ? new Date(row.shipment_date) : new Date(),
             expectedDelivery: row.expected_delivery ? new Date(row.expected_delivery) : null,
-            createdById: req.user.sub,
+            createdById: req.user.sub || req.user.id,
           },
         });
 

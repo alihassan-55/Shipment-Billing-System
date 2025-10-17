@@ -24,7 +24,12 @@ const InvoicesPage = () => {
   const [taxRate, setTaxRate] = useState(0.18)
   const { toast } = useToast()
 
+  // Debug logging
+  console.log('InvoicesPage: invoices =', invoices)
+  console.log('InvoicesPage: invoicesLoading =', invoicesLoading)
+
   useEffect(() => {
+    console.log('InvoicesPage: Fetching invoices...')
     fetchInvoices()
   }, [fetchInvoices])
 

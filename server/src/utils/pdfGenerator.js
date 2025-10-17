@@ -69,7 +69,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
     console.log('Generating Declared Value Invoice PDF for:', invoice.id);
     
     const shipment = invoice.shipments;
-    const shipper = shipment.shippers;
+    const shipper = shipment.Customer;
     const consignee = shipment.consignees;
   
   // Colors
@@ -223,7 +223,7 @@ function generateBillingInvoicePDF(doc, invoice) {
     console.log('Generating Billing Invoice PDF for:', invoice.id);
     
     const shipment = invoice.shipments;
-    const shipper = shipment.shippers;
+    const shipper = shipment.Customer;
     const consignee = shipment.consignees;
   
   // Colors

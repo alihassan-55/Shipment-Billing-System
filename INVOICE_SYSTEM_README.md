@@ -1,144 +1,153 @@
-# Invoice System - Implementation Guide
 
-## Overview
-This document describes the implementation of the comprehensive invoice system for the Courier Billing System, including automated invoice creation from shipments, styled invoice display, and PDF export functionality.
+# Task 4: Invoice & Ledger System — Comprehensive Breakdown (for Cursor Context)
 
-## Features Implemented
+## Goal
+Implement a complete, connected system linking **Shipments → Invoices → Payments → Ledger** within the existing PostgreSQL backend without renaming or breaking prior APIs. This system tracks all customer financial transactions, invoices, and payment records while integrating seamlessly with the Dashboard and Shipment modules.
 
-### 1. Automated Invoice Creation from Shipments
-- **Component**: `CreateInvoiceFromShipments.jsx`
-- **Functionality**: 
-  - Select multiple shipments to create invoices
-  - Automatic grouping by customer
-  - Real-time calculation of invoice totals
-  - Configurable tax rates and due dates
-  - Bulk invoice creation
+---
 
-### 2. Styled Invoice Display
-- **Component**: `InvoiceViewer.jsx`
-- **Features**:
-  - Professional invoice layout with company branding
-  - Company logo integration
-  - Detailed service breakdown
-  - Payment history display
-  - Print-friendly design
-  - Responsive layout
+## 1. High-Level Overview
 
-### 3. PDF Export Functionality
-- **Backend**: Enhanced `pdfGenerator.js` with PDFKit
-- **Features**:
-  - Professional PDF layout matching the web display
-  - Company header with logo placeholder
-  - Detailed service descriptions
-  - Automatic calculations (subtotal, tax, total)
-  - Payment status and history
-  - Downloadable PDF files
+### Flow
+Shipment Created → Auto Invoice Generated → Ledger Entry Added  
+Payment Received → Invoice Updated → Ledger Updated  
+Customer Profile → Shows Invoice + Ledger Summary
 
-## Technical Implementation
+---
 
-### Backend Components
+## 2. Database Models (PostgreSQL)
 
-#### PDF Generator (`server/src/utils/pdfGenerator.js`)
-```javascript
-// Key features:
-- PDFKit integration for professional PDF generation
-- Company branding and layout
-- Automatic invoice calculations
-- Payment history inclusion
-- Error handling and file management
+### invoices
+| Column | Type | Description |
+|---------|------|--------------|
+| id | UUID (PK) | Unique invoice ID |
+| customer_id | UUID (FK -> customers.id) | Link to customer |
+| total_amount | DECIMAL(12,2) | Total invoice amount |
+| amount_paid | DECIMAL(12,2) DEFAULT 0 | Total amount paid so far |
+| balance_due | DECIMAL(12,2) | Generated field (total_amount - amount_paid) |
+| status | VARCHAR(20) DEFAULT 'draft' | Invoice status: draft, unpaid, partial, paid |
+| created_at | TIMESTAMP DEFAULT now() | Creation date |
+| updated_at | TIMESTAMP DEFAULT now() | Update date |
+
+### payments
+| Column | Type | Description |
+|---------|------|--------------|
+| id | UUID (PK) | Unique payment record |
+| invoice_id | UUID (FK -> invoices.id) | Linked invoice |
+| customer_id | UUID (FK -> customers.id) | Linked customer |
+| amount | DECIMAL(12,2) | Payment amount |
+| payment_type | VARCHAR(30) | Cash, Bank, Online, Credit |
+| notes | TEXT | Optional remarks |
+| created_at | TIMESTAMP DEFAULT now() | Timestamp |
+
+### ledger_entries
+| Column | Type | Description |
+|---------|------|--------------|
+| id | UUID (PK) | Ledger record ID |
+| customer_id | UUID (FK -> customers.id) | Linked customer |
+| reference_id | UUID | Related invoice or payment |
+| entry_type | VARCHAR(20) | Invoice / Payment / Adjustment |
+| description | TEXT | Description of entry |
+| debit | DECIMAL(12,2) DEFAULT 0 | Debit amount |
+| credit | DECIMAL(12,2) DEFAULT 0 | Credit amount |
+| balance_after | DECIMAL(12,2) | Running balance after transaction |
+| created_at | TIMESTAMP DEFAULT now() | Timestamp |
+
+---
+
+## 3. Backend Functional Logic
+
+### Invoice Generation (Triggered on Shipment Creation)
+1. Check if customer has open invoice (status = 'draft' or 'unpaid').
+2. If exists → Add shipment total to existing invoice.
+3. If not → Create new invoice for that customer.
+4. Create corresponding ledger entry:
+   - type: 'Invoice'
+   - description: 'Shipment X added to invoice'
+   - debit = shipment amount
+
+### Payment Recording
+1. Add payment via POST /api/payments.
+2. Update linked invoice:
+   - `amount_paid += payment.amount`
+   - `balance_due = total_amount - amount_paid`
+   - `status = 'Paid'` if `balance_due == 0`, else `'Partial'`.
+3. Create ledger entry:
+   - type: 'Payment'
+   - credit = payment.amount
+4. Update `customer.ledger_balance` for quick summary lookup.
+
+### Ledger Updates
+- Each transaction appends new row in `ledger_entries`.
+- Maintain running balance per customer.
+- Use transactions to ensure atomic updates between invoice, payment, and ledger tables.
+
+---
+
+## 4. API Endpoints
+
+| Endpoint | Method | Description |
+|-----------|---------|-------------|
+| `/api/invoices` | GET, POST, PATCH | Create and manage invoices |
+| `/api/payments` | POST, GET | Record payments and update invoices |
+| `/api/ledger/:customerId` | GET | Retrieve full ledger history for a customer |
+| `/api/invoices/:id/summary` | GET | Fetch invoice details with payments and ledger links |
+
+---
+
+## 5. Frontend Components
+
+| Component | Purpose |
+|------------|----------|
+| `Invoices.jsx` | List all invoices (status, total, paid, balance). |
+| `InvoiceDetails.jsx` | Show invoice shipments, payments, and “Add Payment” modal. |
+| `AddPaymentModal.jsx` | Allow adding payments and updating invoice status. |
+| `LedgerTab.jsx` | Display chronological customer transactions with debit/credit columns. |
+
+---
+
+## 6. Integration Logic with Existing System
+
+- Shipment Creation → `POST /api/shipments/create` → triggers Invoice Logic → updates Ledger.
+- Dashboard → fetch total invoices, pending payments, and ledger balances.
+- Customer Profile → integrates Invoice + Ledger tabs under one view.
+
+---
+
+## 7. Performance Practices
+
+- Use PostgreSQL **transactions** for atomic updates.
+- Add indexes:
+  - `CREATE INDEX idx_customer_id ON ledger_entries(customer_id);`
+  - `CREATE INDEX idx_invoice_id ON payments(invoice_id);`
+- Always `.lean()` queries or pagination for large tables.
+- Limit default ledger fetch size to 20 entries (with pagination).
+
+---
+
+## 8. Testing Workflow
+
+1. Create new shipment for an existing customer.
+2. Verify automatic invoice generation.
+3. Add payment → confirm invoice updates correctly.
+4. Retrieve `/api/ledger/:customerId` → check running balance accuracy.
+5. Verify dashboard reflects updated revenue and pending balances.
+
+---
+
+## 9. Documentation Requirement
+
+Each new file must include a 3-line doc comment at the top:
+```js
+// File: ledger.controller.js
+// Purpose: Manage all ledger entries, linked to invoices and payments.
+// Dependencies: invoices.controller.js, payments.controller.js, shipments.controller.js
 ```
 
-#### Invoice Controller (`server/src/controllers/invoiceController.js`)
-```javascript
-// Enhanced endpoints:
-- POST /invoices - Create invoices from shipments
-- GET /invoices/:id - Fetch detailed invoice data
-- POST /invoices/:id/pdf - Generate and download PDF
-```
+---
 
-### Frontend Components
-
-#### Invoice Viewer (`client/src/components/InvoiceViewer.jsx`)
-- Professional invoice display
-- Company logo integration
-- Service breakdown table
-- Payment status and history
-- Print and download actions
-
-#### Create Invoice from Shipments (`client/src/components/CreateInvoiceFromShipments.jsx`)
-- Shipment selection interface
-- Real-time total calculations
-- Customer grouping
-- Bulk invoice creation
-
-#### Enhanced Invoices Page (`client/src/pages/InvoicesPage.jsx`)
-- Integrated invoice management
-- PDF download functionality
-- Invoice viewer integration
-- Automated invoice creation
-
-## Usage Instructions
-
-### Creating Invoices from Shipments
-1. Navigate to the Invoices page
-2. Click "Create Invoice from Shipments"
-3. Select shipments to include (automatically grouped by customer)
-4. Configure tax rate and due date
-5. Review invoice summary
-6. Click "Create Invoice(s)" to generate
-
-### Viewing and Managing Invoices
-1. View invoice list on the Invoices page
-2. Click the eye icon to view detailed invoice
-3. Use download button to generate PDF
-4. Print invoices directly from the viewer
-
-### PDF Export
-- PDFs are automatically generated with professional formatting
-- Company branding and contact information included
-- Service details with sender/receiver information
-- Automatic calculations and payment status
-- Downloadable with proper filename
-
-## File Structure
-```
-client/src/
-├── components/
-│   ├── InvoiceViewer.jsx          # Invoice display component
-│   ├── CreateInvoiceFromShipments.jsx  # Invoice creation component
-│   ├── CompanyLogo.jsx            # Company branding component
-│   └── ui/
-│       └── checkbox.jsx          # Checkbox UI component
-├── pages/
-│   └── InvoicesPage.jsx          # Enhanced invoices page
-└── stores/
-    └── dataStore.js              # Updated with fetchInvoice function
-
-server/src/
-├── controllers/
-│   └── invoiceController.js      # Enhanced invoice controller
-├── routes/
-│   └── invoiceRoutes.js          # Updated invoice routes
-└── utils/
-    └── pdfGenerator.js          # Professional PDF generation
-```
-
-## Dependencies Added
-- `pdfkit` - Professional PDF generation
-- `@radix-ui/react-checkbox` - Checkbox component
-
-## Future Enhancements
-The system is designed to be extensible for additional features:
-- Email invoice delivery
-- Payment integration
-- Invoice templates customization
-- Bulk operations
-- Advanced reporting
-
-## Testing Recommendations
-1. Test invoice creation with various shipment combinations
-2. Verify PDF generation and download functionality
-3. Test responsive design on different screen sizes
-4. Validate calculations accuracy
-5. Test error handling scenarios
-
+## 10. Expected Outcomes
+✅ Fully linked Invoice & Ledger flow.  
+✅ Consistent API naming with previous system.  
+✅ Accurate financial tracking for all customers.  
+✅ Dashboard showing updated payments and pending invoices.

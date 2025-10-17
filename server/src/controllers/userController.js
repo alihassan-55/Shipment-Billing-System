@@ -15,7 +15,21 @@ export async function createUser(req, res) {
 }
 
 export async function getMe(req, res) {
-  const user = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { id: true, name: true, email: true, role: true, isActive: true } });
-  if (!user) return res.status(404).json({ error: 'User not found' });
+  // Backward compatibility: check both req.user.sub and req.user.id
+  const userId = req.user.sub || req.user.id;
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'User ID not found in token' });
+  }
+
+  const user = await prisma.user.findUnique({ 
+    where: { id: userId }, 
+    select: { id: true, name: true, email: true, role: true, isActive: true } 
+  });
+  
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
   return res.json(user);
 }

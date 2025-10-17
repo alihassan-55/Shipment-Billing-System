@@ -1,4 +1,5 @@
 import { prisma } from '../db/client.js';
+import crypto from 'crypto';
 
 // Constants
 const VOLUME_DIVISOR = 5000;
@@ -23,20 +24,20 @@ export async function createShipment(req, res) {
   const {
     referenceNumber,
     serviceProviderId,
-    shipperId,
+    customerId, // Changed from shipperId
     consigneeId,
     terms,
     boxes,
     actualWeightKg,
     productInvoice,
     billingInvoice,
-    status = 'Draft'
+    status = 'DRAFT'
   } = req.body;
 
   // Validation
-  if (!serviceProviderId || !shipperId || !consigneeId || !terms || !boxes || !actualWeightKg) {
+  if (!serviceProviderId || !customerId || !consigneeId || !terms || !boxes || !actualWeightKg) {
     return res.status(400).json({ 
-      error: 'Missing required fields: serviceProviderId, shipperId, consigneeId, terms, boxes, actualWeightKg' 
+      error: 'Missing required fields: serviceProviderId, customerId, consigneeId, terms, boxes, actualWeightKg' 
     });
   }
 
@@ -104,12 +105,25 @@ export async function createShipment(req, res) {
     // Generate reference number if not provided
     const finalReferenceNumber = referenceNumber || generateReferenceNumber();
 
-    // Check if user exists
+    // Check if user exists - Backward compatibility
+    const userId = req.user.sub || req.user.id;
+    console.log('Looking for user with ID:', userId);
+    console.log('User from token:', req.user);
+    
+    // Let's also check what users exist in the database
+    const allUsers = await prisma.user.findMany({
+      select: { id: true, email: true, name: true, isActive: true }
+    });
+    console.log('All users in database:', allUsers);
+    
     const user = await prisma.user.findUnique({
-      where: { id: req.user.sub }
+      where: { id: userId }
     });
 
+    console.log('Found user:', user);
+
     if (!user) {
+      console.log('User not found in database');
       return res.status(400).json({ error: 'User not found' });
     }
 
@@ -126,7 +140,7 @@ export async function createShipment(req, res) {
     console.log('Creating shipment with data:', {
       referenceNumber: finalReferenceNumber,
       serviceProviderId,
-      shipperId,
+      customerId,
       consigneeId,
       terms,
       actualWeightKg,
@@ -139,9 +153,10 @@ export async function createShipment(req, res) {
     
     const shipment = await prisma.shipments.create({
       data: {
+        id: crypto.randomUUID(),
         referenceNumber: finalReferenceNumber,
         serviceProviderId,
-        shipperId,
+        customerId,
         consigneeId,
         terms,
         actualWeightKg: actualWeight,
@@ -149,22 +164,30 @@ export async function createShipment(req, res) {
         chargedWeightKg,
         customsValue: customsValue > 0 ? customsValue : null,
         status,
-        createdById: req.user.sub,
+        createdById: userId,
+        updatedAt: new Date(),
         shipment_boxes: {
-          create: processedBoxes
+          create: processedBoxes.map(box => ({
+            id: crypto.randomUUID(),
+            ...box,
+            createdAt: new Date()
+          }))
         },
         product_invoice_items: productInvoice?.items ? {
           create: productInvoice.items.map(item => ({
+            id: crypto.randomUUID(),
             boxIndex: parseInt(item.boxIndex),
             description: item.description,
             hsCode: item.hsCode,
             pieces: parseInt(item.pieces),
             unitValue: parseFloat(item.unitValue),
-            total: parseInt(item.pieces) * parseFloat(item.unitValue)
+            total: parseInt(item.pieces) * parseFloat(item.unitValue),
+            createdAt: new Date()
           }))
         } : undefined,
         billing_invoices: billingInvoice ? {
           create: {
+            id: crypto.randomUUID(),
             ratePerKg: billingInvoice.ratePerKg ? parseFloat(billingInvoice.ratePerKg) : null,
             totalRate: billingInvoice.totalRate ? parseFloat(billingInvoice.totalRate) : null,
             eFormCharges: parseFloat(billingInvoice.otherCharges?.eFormCharges || 0),
@@ -172,13 +195,15 @@ export async function createShipment(req, res) {
             boxCharges: parseFloat(billingInvoice.otherCharges?.boxCharges || 0),
             grandTotal: parseFloat(billingInvoice.grandTotal || 0),
             paymentMethod: billingInvoice.paymentMethod,
-            customerAccountId: billingInvoice.customerAccountId
+            customerAccountId: billingInvoice.customerAccountId,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
         } : undefined
       },
       include: {
         service_providers: true,
-        shippers: true,
+        Customer: true, // Changed from shippers to Customer
         consignees: true,
         shipment_boxes: true,
         product_invoice_items: true,
@@ -191,13 +216,16 @@ export async function createShipment(req, res) {
 
     // Create ledger entry if payment method is Credit
     if (billingInvoice?.paymentMethod === 'Credit' && billingInvoice?.customerAccountId) {
-      await prisma.ledgerEntry.create({
+      await prisma.ledger_entries.create({
         data: {
+          id: crypto.randomUUID(),
           shipmentId: shipment.id,
           customerAccountId: billingInvoice.customerAccountId,
           amount: parseFloat(billingInvoice.grandTotal),
           currency: 'PKR',
-          status: 'Pending'
+          status: 'Pending',
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       });
     }
@@ -226,6 +254,8 @@ export async function getShipments(req, res) {
     limit = 20,
   } = req.query;
 
+  console.log('getShipments called with query:', req.query);
+
   const where = {};
   if (referenceNumber) where.referenceNumber = { contains: referenceNumber, mode: 'insensitive' };
   if (status) where.status = status;
@@ -238,6 +268,8 @@ export async function getShipments(req, res) {
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
+    console.log('Searching shipments with where clause:', JSON.stringify(where, null, 2));
+    
     const [shipments, total] = await Promise.all([
       prisma.shipments.findMany({
         where,
@@ -245,7 +277,7 @@ export async function getShipments(req, res) {
         take: parseInt(limit),
         include: {
           service_providers: true,
-          shippers: true,
+          Customer: true, // Changed from shippers to Customer
           consignees: true,
           shipment_boxes: true,
           product_invoice_items: true,
@@ -258,6 +290,8 @@ export async function getShipments(req, res) {
       }),
       prisma.shipments.count({ where }),
     ]);
+
+    console.log('Found shipments:', shipments.length, 'Total:', total);
 
     return res.json({
       shipments,
@@ -330,7 +364,7 @@ export async function updateShipment(req, res) {
       data: filteredUpdates,
       include: {
         service_providers: true,
-        shippers: true,
+        Customer: true, // Changed from shippers to Customer
         consignees: true,
         shipment_boxes: true,
         product_invoice_items: true,
@@ -358,24 +392,100 @@ export async function updateAirwayBill(req, res) {
   }
 
   try {
+    // First, check if the shipment exists and if airway bill is already set
+    const existingShipment = await prisma.shipments.findUnique({
+      where: { id },
+      select: { 
+        id: true, 
+        airwayBillNumber: true, 
+        status: true,
+        referenceNumber: true
+      }
+    });
+
+    if (!existingShipment) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    // Check if airway bill is already set (make it non-editable)
+    if (existingShipment.airwayBillNumber) {
+      return res.status(400).json({ 
+        error: 'Airway bill number has already been set and cannot be modified',
+        currentAirwayBill: existingShipment.airwayBillNumber
+      });
+    }
+
+    // Check if shipment is in a valid status for airway bill update
+    if (!['CONFIRMED', 'In Transit', 'Out for Delivery'].includes(existingShipment.status)) {
+      return res.status(400).json({ 
+        error: 'Airway bill can only be updated for shipments with status: CONFIRMED, In Transit, or Out for Delivery',
+        currentStatus: existingShipment.status
+      });
+    }
+
+    // Update the airway bill number
     const shipment = await prisma.shipments.update({
       where: { id },
-      data: { airwayBillNumber },
+      data: { 
+        airwayBillNumber,
+        updatedAt: new Date()
+      },
       include: {
-        serviceProvider: true,
-        shipper: true,
-        consignee: true,
+        service_providers: true,
+        Customer: true,
+        consignees: true,
         User: {
           select: { id: true, name: true, email: true }
         }
       },
     });
 
-    return res.json(shipment);
+    return res.json({
+      message: 'Airway bill number updated successfully',
+      shipment
+    });
   } catch (error) {
     console.error('Airway bill update error:', error);
     if (error.code === 'P2025') return res.status(404).json({ error: 'Shipment not found' });
     return res.status(500).json({ error: 'Failed to update airway bill: ' + error.message });
+  }
+}
+
+export async function getAirwayBillStatus(req, res) {
+  const { id } = req.params;
+
+  try {
+    const shipment = await prisma.shipments.findUnique({
+      where: { id },
+      select: { 
+        id: true, 
+        airwayBillNumber: true, 
+        status: true,
+        referenceNumber: true
+      }
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    const isEditable = !shipment.airwayBillNumber && 
+                      ['CONFIRMED', 'In Transit', 'Out for Delivery'].includes(shipment.status);
+
+    return res.json({
+      shipmentId: shipment.id,
+      referenceNumber: shipment.referenceNumber,
+      airwayBillNumber: shipment.airwayBillNumber,
+      status: shipment.status,
+      isEditable,
+      canUpdate: isEditable,
+      reason: isEditable ? 'Airway bill can be updated' : 
+              shipment.airwayBillNumber ? 'Airway bill already set' : 
+              'Shipment status does not allow airway bill update'
+    });
+  } catch (error) {
+    console.error('Airway bill status error:', error);
+    return res.status(500).json({ error: 'Failed to get airway bill status: ' + error.message });
   }
 }
 
@@ -393,7 +503,7 @@ export async function addShipmentEvent(req, res) {
         description,
         location,
         occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
-        recordedBy: req.user.sub,
+        recordedBy: userId,
       },
     });
 
@@ -408,13 +518,13 @@ export async function confirmShipment(req, res) {
   const { id } = req.params;
 
   try {
-    // Update shipment status to Confirmed
+    // Update shipment status to CONFIRMED
     const shipment = await prisma.shipments.update({
       where: { id },
-      data: { status: 'Confirmed' },
+      data: { status: 'CONFIRMED' },
       include: {
         service_providers: true,
-        shippers: true,
+        Customer: true, // Changed from shippers to Customer
         consignees: true,
         shipment_boxes: true,
         product_invoice_items: true,

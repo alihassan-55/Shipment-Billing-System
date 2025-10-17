@@ -1,0 +1,275 @@
+{
+
+    "Guidelines to Consider": "If some references and Examples like api names and way to work taken as from best systems, Try to implement them into system based on the already made work",
+
+    "task1": "Fix and stabilize the Shipment Module APIs and Customer Autocomplete in the Courier Management System",
+  
+    "objectives": [
+      "Repair API endpoint connections for Shipments.",
+      "Ensure the shipment list loads correctly on page load.",
+      "Fix customer search/autocomplete inside the Create New Shipment form.",
+      "Prevent renaming or recreation of existing API routes or functions."
+    ],
+  
+    "rules": {
+      "naming_and_consistency": [
+        "Keep all API routes, controllers, and model names exactly as defined in the backend.",
+        "Do not rename functions like getShipments, createShipment, getCustomers, or related services.",
+        "All API updates must be incremental and compatible with previous calls."
+      ],
+      "context_awareness": [
+        "Check existing files: Shipment.jsx, ShipmentForm.jsx, shipmentRoutes.js, shipmentController.js, and customerController.js.",
+        "Identify the API path used for fetching shipments and customers before making any modification.",
+        "If an API is missing or deprecated, restore or patch it without creating a duplicate route."
+      ]
+    },
+  
+    "implementation_plan": {
+      "fix_shipment_fetch": {
+        "description": "Resolve 'Failed to load shipments' issue on Shipments page.",
+        "steps": [
+          "Verify frontend fetch endpoint matches backend route (e.g., `/api/shipments` or `/api/shipment/all`).",
+          "If backend route does not exist, implement GET `/api/shipments` returning all shipments with pagination.",
+          "Ensure proper try/catch and return status 200 with array even if empty."
+        ],
+        "expected_response_example": {
+          "status": 200,
+          "data": [
+            {
+              "_id": "12345",
+              "referenceNumber": "CMS-20251016-0001",
+              "shipper": "Ali Hassan",
+              "consignee": "Hassan Raza",
+              "status": "Pending",
+              "createdAt": "2025-10-16T10:30:00Z"
+            }
+          ]
+        }
+      },
+  
+      "fix_autocomplete": {
+        "description": "Enable searching and selecting existing customers from the database.",
+        "steps": [
+          "Connect the autocomplete field in ShipmentForm to the `/api/customers/search?query=` endpoint.",
+          "Ensure backend supports partial search (regex or LIKE) for name, phone, or email.",
+          "Return top 10 matches in lightweight JSON array.",
+          "On selection, auto-fill fields: phone, city, address, email.",
+          "Do not recreate the customer if one already exists (only allow creation when not found)."
+        ],
+        "expected_response_example": {
+          "status": 200,
+          "data": [
+            {
+              "_id": "67890",
+              "name": "Hassan",
+              "phone": "03123456789",
+              "city": "Lahore",
+              "address": "Model Town",
+              "email": "hassan@example.com"
+            }
+          ]
+        }
+      },
+  
+      "backend_consistency_check": {
+        "description": "Ensure correct links between Shipments and Customers models.",
+        "steps": [
+          "Check Shipment model for fields referencing Customer (shipperId, consigneeId).",
+          "Ensure population logic is correctly applied in getShipments and getShipmentById controllers.",
+          "Avoid over-populating nested fields for performance."
+        ]
+      }
+    },
+  
+    "performance_practices": [
+      "Limit shipment list retrieval to 20 records per page with pagination support.",
+      "Debounce autocomplete input (300–500ms) to reduce API load.",
+      "Use lightweight customer response with only essential fields."
+    ],
+  
+    "documentation_practices": {
+      "file_header_comment": "/** Shipment.jsx — Displays all shipments, fetches from API with error handling */",
+      "backend_comment": "/** GET /api/customers/search — Used for customer autocomplete in shipment form */"
+    },
+  
+    "completion_criteria": [
+      "Shipments list loads successfully without error.",
+      "Autocomplete retrieves matching customers correctly.",
+      "Selected customer auto-fills the shipper fields.",
+      "No duplicate or renamed APIs created.",
+      "All data flows remain stable after reload."
+    ],
+
+"task2": "Update and finalize the Main Dashboard of the Courier Management System",
+  
+    "objectives": [
+      "Display correct real-time statistics and actions in the dashboard.",
+      "Maintain API and component name consistency as per existing codebase.",
+      "Ensure smooth redirection, correct data handling, and lightweight loading."
+    ],
+  
+    "rules": {
+      "naming_and_consistency": [
+        "Do not rename existing APIs, components, variables, or imports.",
+        "Use the same structure and naming as defined in current project files (Dashboard, Shipment, Invoice, Customer).",
+        "Do not introduce new API endpoints unless strictly necessary and approved."
+      ],
+      "context_awareness": [
+        "Before editing, check all related components: Dashboard.jsx, Shipment.jsx, Invoice.jsx, Customer.jsx, and backend routes.",
+        "Maintain exact file imports and routes."
+      ]
+    },
+  
+    "implementation_plan": {
+      "total_shipments": {
+        "description": "Show count of shipments sent in the current month.",
+        "logic": [
+          "Fetch data from `/api/shipments` or existing shipment endpoint.",
+          "Filter by creation date (month === currentMonth).",
+          "Display total count dynamically in 'Total Shipments' card.",
+          "OnClick: redirect to Shipment Component using existing route `/shipments`."
+        ]
+      },
+      "total_invoices": {
+        "description": "Display total number of invoices generated this month.",
+        "logic": [
+          "Fetch data from `/api/invoices`.",
+          "Filter invoices by creation date for the current month.",
+          "Show the count dynamically."
+        ]
+      },
+      "total_revenue": {
+        "description": "Show total revenue generated in the current month.",
+        "logic": [
+          "Fetch invoices with 'Paid' status.",
+          "Sum all 'amount' fields.",
+          "Display total revenue with currency formatting."
+        ]
+      },
+      "pending_payments": {
+        "description": "Display total unpaid balance across all customers and shipments.",
+        "logic": [
+          "Fetch unpaid invoices or shipments with due balances.",
+          "Sum their 'remainingAmount' fields.",
+          "Display total balance pending."
+        ]
+      },
+      "recent_activity": {
+        "description": "Show latest actions such as new shipments or invoices.",
+        "logic": [
+          "Fetch latest 5 activities from shipments and invoices APIs.",
+          "Sort by creation date (descending).",
+          "Display activity name, ID, and status (e.g., Pending/Unpaid)."
+        ]
+      },
+      "quick_actions": {
+        "description": "Embed shortcut actions linked to existing components.",
+        "actions": [
+          {
+            "label": "Create Shipment",
+            "component": "ShipmentForm",
+            "link": "/shipments/new"
+          },
+          {
+            "label": "Generate Invoice",
+            "component": "InvoiceForm",
+            "link": "/invoices/new"
+          },
+          {
+            "label": "Add Customer",
+            "component": "CustomerForm",
+            "link": "/customers/new"
+          },
+          {
+            "label": "View Reports",
+            "component": "Reports",
+            "link": "/reports"
+          }
+        ]
+      }
+    },
+  
+    "performance_practices": [
+      "Use backend pagination or filtering when fetching shipments/invoices.",
+      "Limit dashboard API calls to summary data (counts, sums).",
+      "Cache summary results temporarily using state or query cache.",
+      "Avoid re-fetching the same data multiple times.",
+      "Ensure async calls use proper loading and error states."
+    ],
+  
+    "documentation_practices": {
+      "file_header_comment": "/** Dashboard.jsx — Displays summary metrics, recent activities, and quick actions for the Courier Management System */",
+      "jsdoc_example": "/** @function getMonthlyShipmentsCount - Fetches total shipments for the current month @returns {Number} */"
+    },
+  
+    "completion_criteria": [
+      "All metrics show correct live data.",
+      "Clicking any metric or quick action redirects correctly.",
+      "Recent activity updates dynamically on changes.",
+      "No new API names or components were created unnecessarily.",
+      "Performance verified for minimal API load."
+    ], 
+
+    "fix_autocomplete_and_reference_logic": {
+        "description": "Link customer phone number with shipper autofill and reference number logic.",
+        "steps": [
+          "In Create Shipment form, set 'Reference Number' field as the customer’s phone number.",
+          "On phone input, debounce API call (300–500ms) to `/api/customers/search?phone=<value>`.",
+          "If customer exists, autofill shipper information (name, city, address, email).",
+          "If not found, prompt to create new shipper using same form data.",
+          "On creation, auto-assign that customer's phone number as `referenceNumber` in Shipment model.",
+          "Ensure Shipment save process creates relation using customer `_id`.",
+          "Do not create duplicate customers with the same phone number."
+        ],
+        "expected_frontend_flow": [
+          "User enters phone number.",
+          "App fetches `/api/customers/search?phone=03123456789`.",
+          "If found: pre-fill shipper fields.",
+          "If not found: submit form creates new customer, then shipment."
+        ],
+        "expected_backend_behavior": [
+          "GET `/api/customers/search?phone=` → returns existing user if found.",
+          "POST `/api/customers` → creates new user if phone not found.",
+          "POST `/api/shipments` → uses existing or newly created user `_id` as `shipperId`."
+        ]
+      },
+  
+      "backend_consistency_check": {
+        "description": "Ensure model and controller consistency for Shipments and Customers.",
+        "steps": [
+          "Confirm Shipment model includes fields: `shipperId`, `consigneeId`, `referenceNumber`.",
+          "Confirm Customer model includes fields: `name`, `phone`, `email`, `address`, `city`.",
+          "In shipmentController.js, ensure customer lookup occurs before creating a shipment.",
+          "Use Mongoose `.populate('shipperId', 'name phone')` when listing shipments.",
+          "Avoid unnecessary nested populations."
+        ]
+      }
+    },
+  
+    "performance_practices": [
+      "Enable pagination on shipments with limit 20 and page query parameter.",
+      "Use `lean()` in Mongoose queries to reduce payload size.",
+      "Debounce autocomplete by 300–500ms.",
+      "Index `phone` field in Customer model for fast lookup.",
+      "Avoid sending full customer object when only name and phone are needed."
+    ],
+  
+    "documentation_practices": {
+      "frontend_comment": "/** ShipmentForm.jsx — Handles shipment creation with shipper phone lookup, auto-fill, and reference linking. */",
+      "backend_comment": "/** GET /api/customers/search — Used for phone-based lookup to auto-fill shipment form fields. */",
+      "model_comment": "/** Customer.phone — Acts as referenceNumber for linked shipments. Indexed for quick search. */"
+    },
+  
+    "completion_criteria": [
+      "Shipment list loads without error and supports pagination.",
+      "Shipment creation works using phone-based reference linking.",
+      "Existing customers are auto-filled correctly.",
+      "New customers are created only when not found.",
+      "Reference number = phone number for each shipment.",
+      "No duplicate APIs or renamed routes created.",
+      "All logic functions and controllers remain consistent with prior naming."
+    ]
+  }
+
+  
+ 

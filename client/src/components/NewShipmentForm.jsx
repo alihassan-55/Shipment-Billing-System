@@ -7,6 +7,7 @@ import { Separator } from './ui/separator';
 import { Checkbox } from './ui/checkbox';
 import { Package, Calculator, Save, X, Plus } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { debounce } from '../utils/shipmentCalculations';
 import { 
   TypeaheadInput, 
   BoxDimensions, 
@@ -22,7 +23,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
   const [formData, setFormData] = useState({
     referenceNumber: '',
     serviceProviderId: '',
-    shipperId: '',
+    customerId: '', // Changed from shipperId to customerId
     consigneeId: '',
     terms: 'DAP',
     actualWeightKg: 0,
@@ -63,9 +64,9 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
   const [createModalLoading, setCreateModalLoading] = useState(false);
   const [pendingEntityName, setPendingEntityName] = useState('');
 
-  // Generate default reference number
+  // Generate default reference number only if no phone number is provided
   useEffect(() => {
-    if (!formData.referenceNumber) {
+    if (!formData.referenceNumber && !selectedShipper?.phone) {
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       setFormData(prev => ({
@@ -73,7 +74,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
         referenceNumber: `PREFIX-${date}-${random}`
       }));
     }
-  }, []);
+  }, [selectedShipper?.phone]);
 
   // Load service providers
   useEffect(() => {
@@ -96,7 +97,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
     loadServiceProviders();
   }, []);
 
-  // Search shippers
+  // Search shippers by name (existing functionality)
   const searchShippers = async (query) => {
     if (query.length < 2) {
       setShippers([]);
@@ -106,7 +107,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
     setSearchingShippers(true);
     try {
       console.log('Searching shippers with query:', query);
-      const response = await fetch(`http://localhost:3001/api/shippers?query=${encodeURIComponent(query)}`, {
+      const response = await fetch(`http://localhost:3001/api/shippers?query=${encodeURIComponent(query)}&type=shipper`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -114,14 +115,49 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Shippers found:', data);
-        setShippers(data);
+        console.log('Data type:', typeof data, 'Is array:', Array.isArray(data));
+        // Handle both array and object with customers property
+        const shippers = Array.isArray(data) ? data : (data.customers || []);
+        setShippers(shippers);
       } else {
-        console.error('Failed to search shippers:', response.status);
+        console.error('Failed to search shippers:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Error searching shippers:', error);
     } finally {
       setSearchingShippers(false);
+    }
+  };
+
+  // Search shippers by phone number (Task 3)
+  const searchShippersByPhone = async (phone) => {
+    if (!phone || phone.length < 3) {
+      return null;
+    }
+
+    try {
+      console.log('Searching shippers by phone:', phone);
+      const url = `http://localhost:3001/api/shippers/search-by-phone?phone=${encodeURIComponent(phone)}`;
+      console.log('API URL being called:', url);
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Phone search result:', data);
+        return data;
+      } else {
+        console.error('Failed to search shippers by phone:', response.status);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error searching shippers by phone:', error);
+      return null;
     }
   };
 
@@ -153,7 +189,57 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
   // Handle shipper selection
   const handleShipperSelect = (shipper) => {
     setSelectedShipper(shipper);
-    setFormData(prev => ({ ...prev, shipperId: shipper.id }));
+    setFormData(prev => ({ ...prev, customerId: shipper.id })); // Changed from shipperId to customerId
+  };
+
+  // Debounced phone search function
+  const debouncedPhoneSearch = useMemo(
+    () => debounce(async (phone) => {
+      console.log('Debounced phone search for:', phone);
+      if (phone && phone.length >= 3) {
+        const result = await searchShippersByPhone(phone);
+        if (result && result.found) {
+          // Auto-fill shipper information
+          const shipper = result.shipper;
+          setSelectedShipper({
+            id: shipper.id,
+            personName: shipper.personName,
+            phone: shipper.phone,
+            address: shipper.address,
+            city: shipper.city,
+            country: shipper.country,
+            email: shipper.email,
+            cnic: shipper.cnic,
+            ntn: shipper.ntn
+          });
+          setFormData(prev => ({ ...prev, customerId: shipper.id }));
+          console.log('Auto-filled shipper from phone:', shipper);
+        } else {
+          console.log('No existing shipper found for phone:', phone);
+        }
+      }
+    }, 500),
+    []
+  );
+
+  // Handle phone number input (Task 3)
+  const handlePhoneChange = (phone) => {
+    console.log('Phone changed to:', phone);
+    // Update the selected shipper phone
+    setSelectedShipper(prev => ({ ...prev, phone }));
+    
+    // Set reference number to phone number (or clear if phone is empty)
+    if (phone && phone.trim()) {
+      setFormData(prev => ({ ...prev, referenceNumber: phone }));
+    } else {
+      // If phone is cleared, generate a new reference number
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      setFormData(prev => ({ ...prev, referenceNumber: `PREFIX-${date}-${random}` }));
+    }
+    
+    // Trigger debounced search
+    debouncedPhoneSearch(phone);
   };
 
   // Handle consignee selection
@@ -190,7 +276,11 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
       if (response.ok) {
         const newShipper = await response.json();
         setSelectedShipper(newShipper);
-        setFormData(prev => ({ ...prev, shipperId: newShipper.id }));
+        setFormData(prev => ({ ...prev, customerId: newShipper.id })); // Changed from shipperId to customerId
+        // Ensure reference number is set to phone number (Task 3)
+        if (newShipper.phone) {
+          setFormData(prev => ({ ...prev, referenceNumber: newShipper.phone }));
+        }
         setShowCreateShipperModal(false);
         setPendingEntityName('');
       } else {
@@ -315,7 +405,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
       const submissionData = {
         ...formData,
         serviceProviderId: formData.serviceProviderId,
-        shipperId: selectedShipper.id,
+        customerId: selectedShipper.id, // Changed from shipperId to customerId
         consigneeId: selectedConsignee.id,
         boxes: boxes.map((box, index) => ({
           ...box,
@@ -469,9 +559,9 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
                 <Input
                   id="shipperPhone"
                   value={selectedShipper?.phone || ''}
-                  onChange={(e) => setSelectedShipper(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
                   required
-                  placeholder="Phone number"
+                  placeholder="Phone number (will be used as reference number)"
                 />
               </div>
             </div>

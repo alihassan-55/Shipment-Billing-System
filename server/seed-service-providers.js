@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -22,10 +23,13 @@ async function seedServiceProviders() {
 
   for (const name of serviceProviders) {
     try {
-      await prisma.serviceProvider.upsert({
+      await prisma.service_providers.upsert({
         where: { name },
         update: {},
-        create: { name }
+        create: { 
+          id: randomUUID(),
+          name 
+        }
       });
       console.log(`✓ Created service provider: ${name}`);
     } catch (error) {

@@ -54,9 +54,9 @@ const TypeaheadInput = ({
     setIsOpen(false);
   };
 
-  const filteredSuggestions = suggestions.filter(suggestion =>
+  const filteredSuggestions = Array.isArray(suggestions) ? suggestions.filter(suggestion =>
     suggestion.personName.toLowerCase().includes(inputValue.toLowerCase())
-  );
+  ) : [];
 
   return (
     <div className="relative">
@@ -372,17 +372,26 @@ const BillingInvoiceSection = ({
   volumeWeight 
 }) => {
   const [lastEdited, setLastEdited] = useState('totalRate');
+  const [calculationMode, setCalculationMode] = useState('auto'); // 'auto', 'ratePerKg', 'totalRate'
 
   const updateBillingData = (field, value) => {
-    const newData = { ...billingData, [field]: value };
+    const newData = { ...billingData };
     
-    // Handle rate synchronization
+    // Convert value to number for numeric fields
+    const numericValue = parseFloat(value) || 0;
+    newData[field] = numericValue;
+    
+    // Handle bidirectional rate synchronization
     if (field === 'ratePerKg' && chargedWeight > 0) {
-      newData.totalRate = parseFloat(value) * chargedWeight;
+      // Forward calculation: Rate per kg × Weight = Total rate
+      newData.totalRate = numericValue * chargedWeight;
       setLastEdited('ratePerKg');
+      setCalculationMode('ratePerKg');
     } else if (field === 'totalRate' && chargedWeight > 0) {
-      newData.ratePerKg = parseFloat(value) / chargedWeight;
+      // Backward calculation: Total rate ÷ Weight = Rate per kg
+      newData.ratePerKg = numericValue / chargedWeight;
       setLastEdited('totalRate');
+      setCalculationMode('totalRate');
     }
     
     // Calculate grand total
@@ -402,6 +411,47 @@ const BillingInvoiceSection = ({
     newData.grandTotal = (newData.totalRate || 0) + otherCharges;
     onBillingChange(newData);
   };
+
+  // Function to recalculate based on current mode
+  const recalculateBasedOnMode = (mode) => {
+    if (chargedWeight <= 0) return;
+    
+    const newData = { ...billingData };
+    
+    if (mode === 'ratePerKg' && billingData.ratePerKg) {
+      // Calculate total rate from rate per kg
+      newData.totalRate = parseFloat(billingData.ratePerKg) * chargedWeight;
+    } else if (mode === 'totalRate' && billingData.totalRate) {
+      // Calculate rate per kg from total rate
+      newData.ratePerKg = parseFloat(billingData.totalRate) / chargedWeight;
+    }
+    
+    // Recalculate grand total
+    const otherCharges = (newData.eFormCharges || 0) + 
+                        (newData.remoteAreaCharges || 0) + 
+                        (newData.boxCharges || 0);
+    newData.grandTotal = (newData.totalRate || 0) + otherCharges;
+    
+    onBillingChange(newData);
+  };
+
+  // Function to safely format numbers
+  const formatNumber = (value, decimals = 2) => {
+    const num = parseFloat(value) || 0;
+    return num.toFixed(decimals);
+  };
+
+  // Function to handle weight changes (recalculate if needed)
+  const handleWeightChange = () => {
+    if (chargedWeight > 0 && calculationMode !== 'auto') {
+      recalculateBasedOnMode(calculationMode);
+    }
+  };
+
+  // Effect to handle weight changes
+  useEffect(() => {
+    handleWeightChange();
+  }, [chargedWeight]);
 
   return (
     <Card>
@@ -425,10 +475,36 @@ const BillingInvoiceSection = ({
           </div>
         </div>
 
+        {/* Calculation Mode Indicator */}
+        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-md">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-blue-800">Calculation Mode:</span>
+            <span className={`px-2 py-1 rounded text-xs font-medium ${
+              calculationMode === 'ratePerKg' 
+                ? 'bg-green-100 text-green-800' 
+                : calculationMode === 'totalRate'
+                ? 'bg-orange-100 text-orange-800'
+                : 'bg-gray-100 text-gray-800'
+            }`}>
+              {calculationMode === 'ratePerKg' ? 'Rate per kg → Total Rate' : 
+               calculationMode === 'totalRate' ? 'Total Rate → Rate per kg' : 
+               'Auto'}
+            </span>
+          </div>
+          <div className="text-xs text-blue-600">
+            {chargedWeight > 0 ? `${chargedWeight} kg charged` : 'No weight data'}
+          </div>
+        </div>
+
         {/* Rate Input */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="ratePerKg">Rate per kg</Label>
+            <Label htmlFor="ratePerKg" className="flex items-center space-x-2">
+              <span>Rate per kg</span>
+              {calculationMode === 'ratePerKg' && (
+                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Primary</span>
+              )}
+            </Label>
             <Input
               id="ratePerKg"
               type="number"
@@ -436,10 +512,21 @@ const BillingInvoiceSection = ({
               value={billingData.ratePerKg || ''}
               onChange={(e) => updateBillingData('ratePerKg', e.target.value)}
               placeholder="0.00"
+              className={calculationMode === 'ratePerKg' ? 'border-green-300 bg-green-50' : ''}
             />
+            {calculationMode === 'ratePerKg' && chargedWeight > 0 && (
+              <p className="text-xs text-green-600 mt-1">
+                → Total Rate: PKR {formatNumber(billingData.ratePerKg * chargedWeight)}
+              </p>
+            )}
           </div>
           <div>
-            <Label htmlFor="totalRate">Total Rate</Label>
+            <Label htmlFor="totalRate" className="flex items-center space-x-2">
+              <span>Total Rate</span>
+              {calculationMode === 'totalRate' && (
+                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">Primary</span>
+              )}
+            </Label>
             <Input
               id="totalRate"
               type="number"
@@ -447,7 +534,93 @@ const BillingInvoiceSection = ({
               value={billingData.totalRate || ''}
               onChange={(e) => updateBillingData('totalRate', e.target.value)}
               placeholder="0.00"
+              className={calculationMode === 'totalRate' ? 'border-orange-300 bg-orange-50' : ''}
             />
+            {calculationMode === 'totalRate' && chargedWeight > 0 && (
+              <p className="text-xs text-orange-600 mt-1">
+                → Rate per kg: PKR {formatNumber(billingData.totalRate / chargedWeight)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Rate Presets */}
+        <div className="p-3 bg-gray-50 rounded-md">
+          <h4 className="text-sm font-medium text-gray-800 mb-2">Quick Rate Presets:</h4>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateBillingData('ratePerKg', '50')}
+              className="text-xs"
+            >
+              PKR 50/kg
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateBillingData('ratePerKg', '75')}
+              className="text-xs"
+            >
+              PKR 75/kg
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateBillingData('ratePerKg', '100')}
+              className="text-xs"
+            >
+              PKR 100/kg
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateBillingData('totalRate', '500')}
+              className="text-xs"
+            >
+              Flat PKR 500
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateBillingData('totalRate', '1000')}
+              className="text-xs"
+            >
+              Flat PKR 1000
+            </Button>
+          </div>
+        </div>
+
+        {/* Calculation Summary */}
+        <div className="p-3 bg-blue-50 rounded-md">
+          <h4 className="text-sm font-medium text-blue-800 mb-2">Calculation Summary:</h4>
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <span className="text-blue-600">Rate per kg:</span>
+              <span className="ml-2 font-medium">PKR {formatNumber(billingData.ratePerKg)}</span>
+            </div>
+            <div>
+              <span className="text-blue-600">Total Rate:</span>
+              <span className="ml-2 font-medium">PKR {formatNumber(billingData.totalRate)}</span>
+            </div>
+            <div>
+              <span className="text-blue-600">Other Charges:</span>
+              <span className="ml-2 font-medium">PKR {formatNumber((billingData.eFormCharges || 0) + (billingData.remoteAreaCharges || 0) + (billingData.boxCharges || 0))}</span>
+            </div>
+            <div>
+              <span className="text-blue-600 font-bold">Grand Total:</span>
+              <span className="ml-2 font-bold text-lg">PKR {formatNumber(billingData.grandTotal)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Calculation Help */}
+        <div className="p-3 bg-gray-50 rounded-md">
+          <h4 className="text-sm font-medium text-gray-800 mb-2">Calculation Methods:</h4>
+          <div className="text-xs text-gray-600 space-y-1">
+            <p><strong>Rate per kg:</strong> Enter rate per kg → Total rate is calculated automatically</p>
+            <p><strong>Total Rate:</strong> Enter total rate → Rate per kg is calculated automatically</p>
+            <p><strong>Flat Rate:</strong> Use "Total Rate" method for fixed charges regardless of weight</p>
           </div>
         </div>
 
@@ -496,7 +669,7 @@ const BillingInvoiceSection = ({
           <div className="bg-blue-50 px-4 py-2 rounded-md">
             <span className="font-medium">Grand Total: </span>
             <span className="font-bold text-lg text-blue-600">
-              {(billingData.grandTotal || 0).toFixed(2)}
+              PKR {formatNumber(billingData.grandTotal)}
             </span>
           </div>
         </div>
