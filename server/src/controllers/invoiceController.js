@@ -212,13 +212,14 @@ export async function generateInvoicePDFEndpoint(req, res) {
       include: {
         customer: true,
         lineItems: true,
+        payments: true,
       },
     });
 
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
-    // Generate PDF (this would typically be queued)
-    const pdfPath = await generateInvoicePDF(id);
+    // Generate PDF with invoice data
+    const pdfPath = await generateInvoicePDF(id, 'MAIN', invoice);
     
     // Update invoice with PDF path
     await prisma.invoice.update({
@@ -228,6 +229,7 @@ export async function generateInvoicePDFEndpoint(req, res) {
 
     return res.json({ pdfPath, message: 'PDF generated successfully' });
   } catch (error) {
+    console.error('PDF generation error:', error);
     return res.status(500).json({ error: 'Failed to generate PDF' });
   }
 }

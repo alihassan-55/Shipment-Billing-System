@@ -11,6 +11,7 @@ import CustomersPage from './pages/CustomersPage'
 import NewShipmentsPage from './pages/NewShipmentsPage'
 import InvoicesPage from './pages/InvoicesPage'
 import PaymentsPage from './pages/PaymentsPage'
+import LedgerPage from './pages/LedgerPage'
 import ReportsPage from './pages/ReportsPage'
 import BulkImportPage from './pages/BulkImportPage'
 import Layout from './components/Layout'
@@ -38,6 +39,7 @@ function App() {
                       <Route path="/shipments" element={<NewShipmentsPage />} />
                       <Route path="/invoices" element={<InvoicesPage />} />
                       <Route path="/payments" element={<PaymentsPage />} />
+                      <Route path="/ledger" element={<LedgerPage />} />
                       <Route path="/reports" element={<ReportsPage />} />
                       <Route path="/bulk-import" element={<BulkImportPage />} />
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />

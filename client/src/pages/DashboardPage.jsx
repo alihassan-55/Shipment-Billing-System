@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Badge } from "../components/ui/badge"
 import { useDataStore } from "../stores/dataStore"
 import { formatCurrency } from "../lib/utils"
+import LedgerComponent from "../components/LedgerComponent"
 import { 
   Package, 
   FileText, 
@@ -159,6 +160,9 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Ledger Summary */}
+      <LedgerComponent showCustomerFilter={false} />
     </div>
   )
 }

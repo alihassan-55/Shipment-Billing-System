@@ -6,6 +6,7 @@ import {
   Package, 
   FileText, 
   CreditCard, 
+  Calculator,
   BarChart3, 
   Upload,
   LogOut,
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Shipments", href: "/shipments", icon: Package },
   { name: "Invoices", href: "/invoices", icon: FileText },
   { name: "Payments", href: "/payments", icon: CreditCard },
+  { name: "Ledger", href: "/ledger", icon: Calculator },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Bulk Import", href: "/bulk-import", icon: Upload },
 ]

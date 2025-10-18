@@ -59,6 +59,10 @@ export const useDataStore = create((set, get) => ({
   payments: [],
   paymentsLoading: false,
   
+  // Ledger state
+  ledgerEntries: [],
+  ledgerLoading: false,
+  
   // Actions
   fetchDashboardStats: async () => {
     try {
@@ -242,6 +246,20 @@ export const useDataStore = create((set, get) => ({
         success: false, 
         error: error.response?.data?.error || 'Failed to create invoice' 
       }
+    }
+  },
+  
+  fetchLedgerEntries: async (customerId = null) => {
+    set({ ledgerLoading: true })
+    try {
+      const url = customerId ? `/ledger/${customerId}` : '/ledger'
+      const response = await axios.get(url)
+      console.log('Ledger response:', response.data)
+      set({ ledgerEntries: response.data.entries || [], ledgerLoading: false })
+    } catch (error) {
+      set({ ledgerLoading: false })
+      console.error('Failed to fetch ledger entries:', error)
+      set({ ledgerEntries: [] })
     }
   },
   

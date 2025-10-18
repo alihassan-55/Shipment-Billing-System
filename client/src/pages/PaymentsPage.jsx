@@ -10,8 +10,12 @@ const PaymentsPage = () => {
   const { payments, paymentsLoading, fetchPayments } = useDataStore()
 
   useEffect(() => {
+    console.log('PaymentsPage: Fetching payments...')
     fetchPayments()
   }, [fetchPayments])
+
+  console.log('PaymentsPage: payments =', payments)
+  console.log('PaymentsPage: paymentsLoading =', paymentsLoading)
 
   return (
     <div className="space-y-6">
@@ -36,6 +40,12 @@ const PaymentsPage = () => {
         <CardContent>
           {paymentsLoading ? (
             <div className="text-center py-8">Loading payments...</div>
+          ) : payments.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <CreditCard className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <p>No payments found</p>
+              <p className="text-sm">Payments will appear here once they are recorded</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -53,10 +63,10 @@ const PaymentsPage = () => {
                 {payments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-medium">{payment.invoice?.invoiceNumber || "-"}</TableCell>
-                    <TableCell>{payment.invoice?.customer?.name || "-"}</TableCell>
+                    <TableCell>{payment.customer?.name || payment.invoice?.customer?.name || "-"}</TableCell>
                     <TableCell>{formatCurrency(payment.amount)}</TableCell>
-                    <TableCell>{payment.method}</TableCell>
-                    <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                    <TableCell>{payment.paymentType || payment.method || "-"}</TableCell>
+                    <TableCell>{formatDate(payment.createdAt || payment.paymentDate)}</TableCell>
                     <TableCell>{payment.reference || "-"}</TableCell>
                     <TableCell>
                       <Button variant="outline" size="sm">

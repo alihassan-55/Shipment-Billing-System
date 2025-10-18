@@ -11,9 +11,10 @@ const InvoiceViewer = ({ invoice, onDownloadPDF, onPrint }) => {
 
   const getStatusBadge = (status) => {
     const variants = {
-      "Unpaid": "destructive",
-      "Partial": "outline", 
-      "Paid": "secondary"
+      "UNPAID": "destructive",
+      "PARTIAL": "outline", 
+      "PAID": "secondary",
+      "DRAFT": "outline"
     };
     return <Badge variant={variants[status] || "outline"}>{status}</Badge>;
   };
@@ -92,20 +93,14 @@ const InvoiceViewer = ({ invoice, onDownloadPDF, onPrint }) => {
                   <tr key={item.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="py-4 px-4">
                       <div className="space-y-1">
-                        <p className="font-medium text-gray-900">{item.shipment?.serviceType || 'Courier Service'}</p>
+                        <p className="font-medium text-gray-900">{item.description || 'Courier Service'}</p>
                         <p className="text-sm text-gray-600">
-                          From: {item.shipment?.sender?.name || 'N/A'}
+                          Quantity: {item.quantity || 1}
                         </p>
-                        <p className="text-sm text-gray-600">
-                          To: {item.shipment?.receiver?.name || 'N/A'}
-                        </p>
-                        {item.description && (
-                          <p className="text-xs text-gray-500">{item.description}</p>
-                        )}
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center text-gray-700">
-                      {item.shipment?.weight ? `${item.shipment.weight} kg` : 'N/A'}
+                      {item.quantity || 1}
                     </td>
                     <td className="py-4 px-4 text-right text-gray-700">
                       {formatCurrency(item.unitPrice)}
@@ -150,10 +145,13 @@ const InvoiceViewer = ({ invoice, onDownloadPDF, onPrint }) => {
               {invoice.payments.map((payment, index) => (
                 <div key={payment.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                   <div>
-                    <p className="font-medium text-gray-900">{formatDate(payment.paymentDate)}</p>
-                    <p className="text-sm text-gray-600">{payment.method}</p>
+                    <p className="font-medium text-gray-900">{formatDate(payment.createdAt)}</p>
+                    <p className="text-sm text-gray-600">{payment.paymentType}</p>
                     {payment.reference && (
                       <p className="text-xs text-gray-500">Ref: {payment.reference}</p>
+                    )}
+                    {payment.notes && (
+                      <p className="text-xs text-gray-500">{payment.notes}</p>
                     )}
                   </div>
                   <div className="text-right">
