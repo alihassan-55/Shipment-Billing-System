@@ -19,10 +19,18 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     }
   }, [shipmentId]);
 
+  // Also refresh invoices when shipment status changes to CONFIRMED
+  useEffect(() => {
+    if (shipmentId && shipmentStatus === 'CONFIRMED') {
+      loadInvoices();
+    }
+  }, [shipmentStatus]);
+
   const loadInvoices = async () => {
     setLoading(true);
+    console.log('Loading invoices for shipment:', shipmentId, 'status:', shipmentStatus);
     try {
-      const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}/invoices`, {
+      const response = await fetch(`http://localhost:3001/api/shipment-invoices/shipments/${shipmentId}/invoices`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -30,6 +38,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Invoices loaded:', data.invoices);
         setInvoices(data.invoices || []);
       } else {
         console.error('Failed to load invoices:', response.status);
@@ -44,7 +53,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const generateInvoices = async () => {
     setGenerating(true);
     try {
-      const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}/generate-invoices`, {
+      const response = await fetch(`http://localhost:3001/api/shipment-invoices/shipments/${shipmentId}/generate-invoices`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -137,7 +146,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Invoices</span>
-          {invoices.length === 0 && shipmentStatus === 'Confirmed' && (
+          {invoices.length === 0 && shipmentStatus === 'CONFIRMED' && (
             <Button 
               onClick={generateInvoices} 
               disabled={generating}
@@ -159,18 +168,18 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
         </CardTitle>
         <CardDescription>
           {invoices.length === 0 
-            ? shipmentStatus === 'Confirmed' 
-              ? 'Click "Generate Invoices" to create Declared Value and Billing invoices'
-              : 'Invoices will be available after shipment confirmation'
-            : 'Two invoices are generated for each confirmed shipment'
+            ? shipmentStatus === 'CONFIRMED' 
+              ? 'Invoices are automatically generated when shipment is confirmed'
+              : 'Invoices will be automatically generated after shipment confirmation'
+            : 'Two invoices are automatically generated for each confirmed shipment'
           }
         </CardDescription>
       </CardHeader>
       <CardContent>
         {invoices.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            {shipmentStatus === 'Confirmed' 
-              ? 'No invoices generated yet'
+            {shipmentStatus === 'CONFIRMED' 
+              ? 'Invoices are being generated automatically...'
               : 'Shipment must be confirmed to generate invoices'
             }
           </div>
@@ -192,7 +201,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
                 <div className="grid grid-cols-2 gap-4 mb-3">
                   <div>
                     <p className="text-sm text-gray-600">Total Amount</p>
-                    <p className="font-medium">PKR {invoice.total.toLocaleString()}</p>
+                    <p className="font-medium">Rs {invoice.total.toLocaleString()}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Issued Date</p>

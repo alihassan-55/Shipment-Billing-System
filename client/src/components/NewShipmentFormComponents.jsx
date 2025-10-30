@@ -377,28 +377,36 @@ const BillingInvoiceSection = ({
   const updateBillingData = (field, value) => {
     const newData = { ...billingData };
     
-    // Convert value to number for numeric fields
-    const numericValue = parseFloat(value) || 0;
-    newData[field] = numericValue;
+    // Check if field is numeric or text
+    const numericFields = ['ratePerKg', 'totalRate', 'eFormCharges', 'remoteAreaCharges', 'boxCharges', 'grandTotal', 'cashAmount'];
     
-    // Handle bidirectional rate synchronization
-    if (field === 'ratePerKg' && chargedWeight > 0) {
-      // Forward calculation: Rate per kg × Weight = Total rate
-      newData.totalRate = numericValue * chargedWeight;
-      setLastEdited('ratePerKg');
-      setCalculationMode('ratePerKg');
-    } else if (field === 'totalRate' && chargedWeight > 0) {
-      // Backward calculation: Total rate ÷ Weight = Rate per kg
-      newData.ratePerKg = numericValue / chargedWeight;
-      setLastEdited('totalRate');
-      setCalculationMode('totalRate');
+    if (numericFields.includes(field)) {
+      // Convert value to number for numeric fields
+      const numericValue = parseFloat(value) || 0;
+      newData[field] = numericValue;
+      
+      // Handle bidirectional rate synchronization
+      if (field === 'ratePerKg' && chargedWeight > 0) {
+        // Forward calculation: Rate per kg × Weight = Total rate
+        newData.totalRate = numericValue * chargedWeight;
+        setLastEdited('ratePerKg');
+        setCalculationMode('ratePerKg');
+      } else if (field === 'totalRate' && chargedWeight > 0) {
+        // Backward calculation: Total rate ÷ Weight = Rate per kg
+        newData.ratePerKg = numericValue / chargedWeight;
+        setLastEdited('totalRate');
+        setCalculationMode('totalRate');
+      }
+      
+      // Calculate grand total
+      const otherCharges = (newData.eFormCharges || 0) + 
+                          (newData.remoteAreaCharges || 0) + 
+                          (newData.boxCharges || 0);
+      newData.grandTotal = (newData.totalRate || 0) + otherCharges;
+    } else {
+      // For non-numeric fields (like paymentMethod, customerAccountId), use value as-is
+      newData[field] = value;
     }
-    
-    // Calculate grand total
-    const otherCharges = (newData.eFormCharges || 0) + 
-                        (newData.remoteAreaCharges || 0) + 
-                        (newData.boxCharges || 0);
-    newData.grandTotal = (newData.totalRate || 0) + otherCharges;
     
     onBillingChange(newData);
   };
@@ -516,7 +524,7 @@ const BillingInvoiceSection = ({
             />
             {calculationMode === 'ratePerKg' && chargedWeight > 0 && (
               <p className="text-xs text-green-600 mt-1">
-                → Total Rate: PKR {formatNumber(billingData.ratePerKg * chargedWeight)}
+                → Total Rate: Rs {formatNumber(billingData.ratePerKg * chargedWeight)}
               </p>
             )}
           </div>
@@ -538,7 +546,7 @@ const BillingInvoiceSection = ({
             />
             {calculationMode === 'totalRate' && chargedWeight > 0 && (
               <p className="text-xs text-orange-600 mt-1">
-                → Rate per kg: PKR {formatNumber(billingData.totalRate / chargedWeight)}
+                → Rate per kg: Rs {formatNumber(billingData.totalRate / chargedWeight)}
               </p>
             )}
           </div>
@@ -554,7 +562,7 @@ const BillingInvoiceSection = ({
               onClick={() => updateBillingData('ratePerKg', '50')}
               className="text-xs"
             >
-              PKR 50/kg
+              Rs 50/kg
             </Button>
             <Button
               variant="outline"
@@ -562,7 +570,7 @@ const BillingInvoiceSection = ({
               onClick={() => updateBillingData('ratePerKg', '75')}
               className="text-xs"
             >
-              PKR 75/kg
+              Rs 75/kg
             </Button>
             <Button
               variant="outline"
@@ -570,7 +578,7 @@ const BillingInvoiceSection = ({
               onClick={() => updateBillingData('ratePerKg', '100')}
               className="text-xs"
             >
-              PKR 100/kg
+              Rs 100/kg
             </Button>
             <Button
               variant="outline"
@@ -578,7 +586,7 @@ const BillingInvoiceSection = ({
               onClick={() => updateBillingData('totalRate', '500')}
               className="text-xs"
             >
-              Flat PKR 500
+              Flat Rs 500
             </Button>
             <Button
               variant="outline"
@@ -586,7 +594,7 @@ const BillingInvoiceSection = ({
               onClick={() => updateBillingData('totalRate', '1000')}
               className="text-xs"
             >
-              Flat PKR 1000
+              Flat Rs 1000
             </Button>
           </div>
         </div>
@@ -597,19 +605,19 @@ const BillingInvoiceSection = ({
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
               <span className="text-blue-600">Rate per kg:</span>
-              <span className="ml-2 font-medium">PKR {formatNumber(billingData.ratePerKg)}</span>
+              <span className="ml-2 font-medium">Rs {formatNumber(billingData.ratePerKg)}</span>
             </div>
             <div>
               <span className="text-blue-600">Total Rate:</span>
-              <span className="ml-2 font-medium">PKR {formatNumber(billingData.totalRate)}</span>
+              <span className="ml-2 font-medium">Rs {formatNumber(billingData.totalRate)}</span>
             </div>
             <div>
               <span className="text-blue-600">Other Charges:</span>
-              <span className="ml-2 font-medium">PKR {formatNumber((billingData.eFormCharges || 0) + (billingData.remoteAreaCharges || 0) + (billingData.boxCharges || 0))}</span>
+              <span className="ml-2 font-medium">Rs {formatNumber((billingData.eFormCharges || 0) + (billingData.remoteAreaCharges || 0) + (billingData.boxCharges || 0))}</span>
             </div>
             <div>
               <span className="text-blue-600 font-bold">Grand Total:</span>
-              <span className="ml-2 font-bold text-lg">PKR {formatNumber(billingData.grandTotal)}</span>
+              <span className="ml-2 font-bold text-lg">Rs {formatNumber(billingData.grandTotal)}</span>
             </div>
           </div>
         </div>
@@ -669,7 +677,7 @@ const BillingInvoiceSection = ({
           <div className="bg-blue-50 px-4 py-2 rounded-md">
             <span className="font-medium">Grand Total: </span>
             <span className="font-bold text-lg text-blue-600">
-              PKR {formatNumber(billingData.grandTotal)}
+              Rs {formatNumber(billingData.grandTotal)}
             </span>
           </div>
         </div>
@@ -699,6 +707,66 @@ const BillingInvoiceSection = ({
               <span>Credit</span>
             </label>
           </div>
+
+          {/* Cash Amount Input (shown when Cash is selected) */}
+          {billingData.paymentMethod === 'Cash' && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="cashAmount" className="text-sm font-medium">
+                    Cash Amount Received
+                  </Label>
+                  <Input
+                    id="cashAmount"
+                    type="number"
+                    step="0.01"
+                    value={billingData.cashAmount || ''}
+                    onChange={(e) => updateBillingData('cashAmount', e.target.value)}
+                    placeholder="Enter cash received"
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div className="text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Amount:</span>
+                    <span className="font-medium">Rs {formatNumber(billingData.grandTotal || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Cash Received:</span>
+                    <span className="font-medium text-green-600">
+                      Rs {formatNumber(billingData.cashAmount || 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-green-300">
+                    <span className="font-medium text-gray-700">Remaining Balance:</span>
+                    <span className={`font-bold ${
+                      ((billingData.grandTotal || 0) - (billingData.cashAmount || 0)) > 0 
+                        ? 'text-orange-600' 
+                        : 'text-green-600'
+                    }`}>
+                      Rs {formatNumber(Math.max(0, (billingData.grandTotal || 0) - (billingData.cashAmount || 0)))}
+                    </span>
+                  </div>
+                </div>
+
+                {((billingData.grandTotal || 0) - (billingData.cashAmount || 0)) > 0 && (
+                  <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-800">
+                    <strong>Note:</strong> Remaining Rs {formatNumber((billingData.grandTotal || 0) - (billingData.cashAmount || 0))} will be added to customer ledger
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Credit Payment Info */}
+          {billingData.paymentMethod === 'Credit' && (
+            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-md">
+              <p className="text-sm text-orange-800">
+                <strong>Entire amount (Rs {formatNumber(billingData.grandTotal || 0)}) will be added to customer ledger</strong>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Customer Account (for Credit payments) */}

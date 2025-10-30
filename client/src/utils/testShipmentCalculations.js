@@ -70,10 +70,10 @@ const testItems = [
 ];
 
 const totalCustomsValue = calculateProductInvoiceTotal(testItems);
-console.log(`Item 1: 5 × $10.50 = $52.50`);
-console.log(`Item 2: 3 × $25.00 = $75.00`);
-console.log(`Item 3: 2 × $15.75 = $31.50`);
-console.log(`Total Customs Value: $${totalCustomsValue} (should be $159.00)`);
+console.log(`Item 1: 5 × Rs 10.50 = Rs 52.50`);
+console.log(`Item 2: 3 × Rs 25.00 = Rs 75.00`);
+console.log(`Item 3: 2 × Rs 15.75 = Rs 31.50`);
+console.log(`Total Customs Value: Rs ${totalCustomsValue} (should be Rs 159.00)`);
 console.log('✓ Test passed\n');
 
 // Test reference number generation

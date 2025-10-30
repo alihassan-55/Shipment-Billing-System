@@ -142,7 +142,7 @@ const ShipmentsPage = () => {
   // Handle shipment confirmation
   const handleShipmentConfirmation = async (shipmentId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}/confirm`, {
+      const response = await fetch(`http://localhost:3001/api/shipment-invoices/shipments/${shipmentId}/confirm`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -225,7 +225,10 @@ const ShipmentsPage = () => {
 
   // Format currency
   const formatCurrency = (amount) => {
-    return `PKR ${amount.toFixed(2)}`;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'PKR',
+    }).format(amount).replace('PKR', 'Rs');
   };
 
   return (
@@ -434,6 +437,23 @@ const ShipmentsPage = () => {
             onSubmit={handleShipmentCreated}
             onCancel={() => setIsCreateDialogOpen(false)}
             user={user}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Shipment Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Shipment</DialogTitle>
+            <DialogDescription>
+              Update shipment details for {editingShipment?.referenceNumber}
+            </DialogDescription>
+          </DialogHeader>
+          <NewShipmentForm
+            shipment={editingShipment}
+            onSubmit={handleShipmentUpdated}
+            onCancel={() => setIsEditDialogOpen(false)}
           />
         </DialogContent>
       </Dialog>
@@ -735,6 +755,7 @@ const ShipmentsPage = () => {
 
               {/* Shipment Invoices */}
               <ShipmentInvoicesPanel 
+                key={`${selectedShipment.id}-${selectedShipment.status}`}
                 shipmentId={selectedShipment.id} 
                 shipmentStatus={selectedShipment.status}
               />

@@ -1,0 +1,62 @@
+Whole Application
+Issues -> Solution
+Currency being used is dollar -> Change it to Rs
+
+
+
+Shipment Component:
+Issues -> Solution
+1. Actions Options (view is working, Edit option is not working, Delete Option is not working also ) 
+2. Invoices Declared value (There is unpaid button comes in corner, remove it. Declared Value invoice of documentation incase of issue)
+3. Reference Value Default as Phone Number Functionality is still now working. 
+4. Create Shipment Component Payment Method radio button not working.
+
+Function Improvment:
+1. Payment Method improvment for Create shipment component, Cash option with input and credit
+
+
+Invoice Components: 
+Issues -> Solution
+1. Button on Corner Create Invoice from Shipment -> Should be deleted there is no need for it now. 
+2. Action Buttons view button should deleted.
+3. Action Button Download should work and link it to the Pdf that is downloaded.
+
+
+
+
+Functionality improvements 
+1. Payment Status options (Unpaid, Paid, Add to Ledger)
+2. Add to Ledger Function should directly add this payment to this Payment into ledger of that specific Customer/Shipper
+
+
+
+Payments Component.
+Functionalities -> Details
+1. Record Payment Dialogue -> Select Customer (It will be integrated to Customer Personal Ledger for Payment), + Specific Invoice + Shipment + Date + Details of payment)
+2. Recorded transaction showing in table for all transaction
+
+
+Ledger Component
+Issues -> Solution
+1. References of Ledgers should be the invoice number.
+2. Action option of View in Ledger Entries -> Should Open a Dialogue box with Date, Invoice Number or Payment recorded, Name of customer/shipper, Shipment, Remaining Payment.
+
+
+Functionality Addition/Improvement
+1. User should have their Ledger using same component and same functionality for only their transactions.
+2. Ledger should also recorded payment from payment section, Like remaining payment recieved afterwards and other ones.
+
+
+
+
+Before Moving Forward, We will rectify the Issues faced during testing for the functions made during processes
+
+Issues -> Solution
+
+NewShipmentForm.jsx:
+Issues1- Editing and Creating Shipment: Cash Amount recieved is not Updated and when payment is more than shipment add that to account as credit. Put Api is showing error 404, Connecting to the shipper/customers ledger.
+
+
+
+
+

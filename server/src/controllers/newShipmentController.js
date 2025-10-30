@@ -1,16 +1,19 @@
+// File: newShipmentController.js
+// Purpose: Enhanced shipment management with integrated billing and ledger tracking
+// Dependencies: prisma client, integrationService
+
 import { prisma } from '../db/client.js';
 import crypto from 'crypto';
+import { IntegrationService } from '../services/integrationService.js';
 
 // Constants
 const VOLUME_DIVISOR = 5000;
 
 // Helper function to calculate volumetric weight
 function calculateVolumetricWeight(lengthCm, widthCm, heightCm) {
-  const volume = (lengthCm * widthCm * heightCm) / VOLUME_DIVISOR;
-  return Math.ceil(volume); // Round up to next integer
+  return (lengthCm * widthCm * heightCm) / VOLUME_DIVISOR;
 }
 
-// Helper function to generate reference number
 function generateReferenceNumber() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
@@ -24,14 +27,14 @@ export async function createShipment(req, res) {
   const {
     referenceNumber,
     serviceProviderId,
-    customerId, // Changed from shipperId
+    customerId,
     consigneeId,
     terms,
     boxes,
     actualWeightKg,
     productInvoice,
     billingInvoice,
-    status = 'DRAFT'
+    status = 'Draft'
   } = req.body;
 
   // Validation
@@ -69,166 +72,38 @@ export async function createShipment(req, res) {
   }
 
   try {
-    // Calculate volumetric weights and charged weight
-    let totalVolumeWeight = 0;
-    const processedBoxes = boxes.map((box, index) => {
-      const lengthCm = parseFloat(box.lengthCm);
-      const widthCm = parseFloat(box.widthCm);
-      const heightCm = parseFloat(box.heightCm);
-      
-      if (isNaN(lengthCm) || isNaN(widthCm) || isNaN(heightCm) || 
-          lengthCm <= 0 || widthCm <= 0 || heightCm <= 0) {
-        throw new Error(`Invalid box dimensions for box ${index + 1}`);
-      }
-      
-      const volumetricWeight = calculateVolumetricWeight(lengthCm, widthCm, heightCm);
-      totalVolumeWeight += volumetricWeight;
-      
-      return {
-        index: index + 1,
-        lengthCm,
-        widthCm,
-        heightCm,
-        volumetricWeightKg: volumetricWeight,
-        actualWeightKg: box.actualWeightKg ? parseFloat(box.actualWeightKg) : null
-      };
-    });
+    // Use Integration Service for cohesive shipment creation
+    // Calculate weights
+    const boxesWithVolumetric = (boxes || []).map((box, index) => ({
+      ...box,
+      index: box.index ?? index + 1,
+      volumetricWeightKg: calculateVolumetricWeight(
+        parseFloat(box.lengthCm),
+        parseFloat(box.widthCm),
+        parseFloat(box.heightCm)
+      )
+    }));
 
-    const chargedWeightKg = Math.max(actualWeight, totalVolumeWeight);
+    const totalVolumeWeight = boxesWithVolumetric.reduce((sum, b) => sum + (b.volumetricWeightKg || 0), 0);
+    const totalActualWeight = boxesWithVolumetric.reduce((sum, b) => sum + (parseFloat(b.actualWeightKg || 0)), 0) || actualWeight;
+    const chargedWeightKg = Math.max(totalActualWeight, totalVolumeWeight);
 
-    // Calculate customs value from product invoice
-    let customsValue = 0;
-    if (productInvoice && productInvoice.items) {
-      customsValue = productInvoice.items.reduce((sum, item) => sum + (item.pieces * item.unitValue), 0);
-    }
-
-    // Generate reference number if not provided
-    const finalReferenceNumber = referenceNumber || generateReferenceNumber();
-
-    // Check if user exists - Backward compatibility
-    const userId = req.user.sub || req.user.id;
-    console.log('Looking for user with ID:', userId);
-    console.log('User from token:', req.user);
-    
-    // Let's also check what users exist in the database
-    const allUsers = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, isActive: true }
-    });
-    console.log('All users in database:', allUsers);
-    
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    console.log('Found user:', user);
-
-    if (!user) {
-      console.log('User not found in database');
-      return res.status(400).json({ error: 'User not found' });
-    }
-
-    // Check for duplicate reference number
-    const existingShipment = await prisma.shipments.findUnique({
-      where: { referenceNumber: finalReferenceNumber }
-    });
-
-    if (existingShipment) {
-      return res.status(409).json({ error: 'Reference number already exists' });
-    }
-
-    // Create shipment with related data
-    console.log('Creating shipment with data:', {
-      referenceNumber: finalReferenceNumber,
+    const shipmentData = {
+      referenceNumber: referenceNumber || generateReferenceNumber(),
       serviceProviderId,
       customerId,
       consigneeId,
       terms,
-      actualWeightKg,
+      boxes: boxesWithVolumetric,
+      actualWeightKg: totalActualWeight,
       volumeWeightKg: totalVolumeWeight,
       chargedWeightKg,
-      customsValue: customsValue > 0 ? customsValue : null,
-      status,
-      createdById: req.user.sub
-    });
-    
-    const shipment = await prisma.shipments.create({
-      data: {
-        id: crypto.randomUUID(),
-        referenceNumber: finalReferenceNumber,
-        serviceProviderId,
-        customerId,
-        consigneeId,
-        terms,
-        actualWeightKg: actualWeight,
-        volumeWeightKg: totalVolumeWeight,
-        chargedWeightKg,
-        customsValue: customsValue > 0 ? customsValue : null,
-        status,
-        createdById: userId,
-        updatedAt: new Date(),
-        shipment_boxes: {
-          create: processedBoxes.map(box => ({
-            id: crypto.randomUUID(),
-            ...box,
-            createdAt: new Date()
-          }))
-        },
-        product_invoice_items: productInvoice?.items ? {
-          create: productInvoice.items.map(item => ({
-            id: crypto.randomUUID(),
-            boxIndex: parseInt(item.boxIndex),
-            description: item.description,
-            hsCode: item.hsCode,
-            pieces: parseInt(item.pieces),
-            unitValue: parseFloat(item.unitValue),
-            total: parseInt(item.pieces) * parseFloat(item.unitValue),
-            createdAt: new Date()
-          }))
-        } : undefined,
-        billing_invoices: billingInvoice ? {
-          create: {
-            id: crypto.randomUUID(),
-            ratePerKg: billingInvoice.ratePerKg ? parseFloat(billingInvoice.ratePerKg) : null,
-            totalRate: billingInvoice.totalRate ? parseFloat(billingInvoice.totalRate) : null,
-            eFormCharges: parseFloat(billingInvoice.otherCharges?.eFormCharges || 0),
-            remoteAreaCharges: parseFloat(billingInvoice.otherCharges?.remoteAreaCharges || 0),
-            boxCharges: parseFloat(billingInvoice.otherCharges?.boxCharges || 0),
-            grandTotal: parseFloat(billingInvoice.grandTotal || 0),
-            paymentMethod: billingInvoice.paymentMethod,
-            customerAccountId: billingInvoice.customerAccountId,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
-        } : undefined
-      },
-      include: {
-        service_providers: true,
-        Customer: true, // Changed from shippers to Customer
-        consignees: true,
-        shipment_boxes: true,
-        product_invoice_items: true,
-        billing_invoices: true,
-        User: {
-          select: { id: true, name: true, email: true }
-        }
-      }
-    });
+      productInvoice,
+      billingInvoice,
+      status
+    };
 
-    // Create ledger entry if payment method is Credit
-    if (billingInvoice?.paymentMethod === 'Credit' && billingInvoice?.customerAccountId) {
-      await prisma.ledger_entries.create({
-        data: {
-          id: crypto.randomUUID(),
-          shipmentId: shipment.id,
-          customerAccountId: billingInvoice.customerAccountId,
-          amount: parseFloat(billingInvoice.grandTotal),
-          currency: 'PKR',
-          status: 'Pending',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-    }
+    const shipment = await IntegrationService.createShipmentWithBilling(shipmentData, req.user.sub);
 
     return res.status(201).json(shipment);
   } catch (error) {
@@ -254,30 +129,27 @@ export async function getShipments(req, res) {
     limit = 20,
   } = req.query;
 
-  console.log('getShipments called with query:', req.query);
-
   const where = {};
   if (referenceNumber) where.referenceNumber = { contains: referenceNumber, mode: 'insensitive' };
   if (status) where.status = status;
   if (from || to) {
-    where.bookedAt = {};
-    if (from) where.bookedAt.gte = new Date(from);
-    if (to) where.bookedAt.lte = new Date(to);
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from);
+    if (to) where.createdAt.lte = new Date(to);
   }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    console.log('Searching shipments with where clause:', JSON.stringify(where, null, 2));
-    
     const [shipments, total] = await Promise.all([
       prisma.shipments.findMany({
         where,
         skip,
         take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
         include: {
           service_providers: true,
-          Customer: true, // Changed from shippers to Customer
+          Customer: true,
           consignees: true,
           shipment_boxes: true,
           product_invoice_items: true,
@@ -285,13 +157,10 @@ export async function getShipments(req, res) {
           User: {
             select: { id: true, name: true, email: true }
           }
-        },
-        orderBy: { bookedAt: 'desc' },
+        }
       }),
-      prisma.shipments.count({ where }),
+      prisma.shipments.count({ where })
     ]);
-
-    console.log('Found shipments:', shipments.length, 'Total:', total);
 
     return res.json({
       shipments,
@@ -299,8 +168,8 @@ export async function getShipments(req, res) {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / parseInt(limit)),
-      },
+        pages: Math.ceil(total / parseInt(limit))
+      }
     });
   } catch (error) {
     console.error('Error fetching shipments:', error);
@@ -308,27 +177,28 @@ export async function getShipments(req, res) {
   }
 }
 
-export async function getShipment(req, res) {
+export async function getShipmentById(req, res) {
   const { id } = req.params;
 
   try {
     const shipment = await prisma.shipments.findUnique({
       where: { id },
       include: {
-        serviceProvider: true,
-        shipper: true,
-        consignee: true,
-        boxes: true,
-        productInvoiceItems: true,
-        billingInvoice: true,
-        events: { orderBy: { occurredAt: 'desc' } },
+        service_providers: true,
+        Customer: true,
+        consignees: true,
+        shipment_boxes: true,
+        product_invoice_items: true,
+        billing_invoices: true,
         User: {
           select: { id: true, name: true, email: true }
         }
-      },
+      }
     });
 
-    if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
+    if (!shipment) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
 
     return res.json(shipment);
   } catch (error) {
@@ -339,32 +209,90 @@ export async function getShipment(req, res) {
 
 export async function updateShipment(req, res) {
   const { id } = req.params;
-  const updates = req.body;
-
-  // Define allowed fields for update
-  const allowedFields = [
-    'status',
-    'terms',
-    'actualWeightKg',
-    'expectedDelivery',
-    'deliveredAt'
-  ];
-
-  // Filter updates to only include allowed fields
-  const filteredUpdates = {};
-  allowedFields.forEach(field => {
-    if (updates[field] !== undefined) {
-      filteredUpdates[field] = updates[field];
-    }
-  });
+  const updateData = req.body;
 
   try {
+    // Get existing shipment
+    const existingShipment = await prisma.shipments.findUnique({
+      where: { id },
+      include: {
+        Customer: true,
+        billing_invoices: true
+      }
+    });
+
+    if (!existingShipment) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    // Filter out non-updatable fields
+    const { id: _, createdAt, createdById, ...filteredUpdates } = updateData;
+
+    // Handle billing invoice updates
+    if (updateData.billingInvoice) {
+      const billingData = updateData.billingInvoice;
+      
+      if (existingShipment.billing_invoices) {
+        // Update existing billing invoice
+        await prisma.billing_invoices.update({
+          where: { id: existingShipment.billing_invoices.id },
+          data: {
+            ratePerKg: billingData.ratePerKg ? parseFloat(billingData.ratePerKg) : null,
+            totalRate: billingData.totalRate ? parseFloat(billingData.totalRate) : null,
+            eFormCharges: parseFloat(billingData.eFormCharges || 0),
+            remoteAreaCharges: parseFloat(billingData.remoteAreaCharges || 0),
+            boxCharges: parseFloat(billingData.boxCharges || 0),
+            grandTotal: parseFloat(billingData.grandTotal || 0),
+            paymentMethod: billingData.paymentMethod,
+            customerAccountId: billingData.customerAccountId,
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // Create new billing invoice
+        await prisma.billing_invoices.create({
+          data: {
+            id: crypto.randomUUID(),
+            shipmentId: id,
+            ratePerKg: billingData.ratePerKg ? parseFloat(billingData.ratePerKg) : null,
+            totalRate: billingData.totalRate ? parseFloat(billingData.totalRate) : null,
+            eFormCharges: parseFloat(billingData.eFormCharges || 0),
+            remoteAreaCharges: parseFloat(billingData.remoteAreaCharges || 0),
+            boxCharges: parseFloat(billingData.boxCharges || 0),
+            grandTotal: parseFloat(billingData.grandTotal || 0),
+            paymentMethod: billingData.paymentMethod,
+            customerAccountId: billingData.customerAccountId,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+      }
+
+      // Handle ledger entries for updated billing
+      if (billingData.paymentMethod === 'Credit' && billingData.customerAccountId) {
+        await prisma.ledgerEntry.create({
+          data: {
+            id: crypto.randomUUID(),
+            customerId: existingShipment.customerId,
+            referenceId: id,
+            entryType: 'INVOICE',
+            description: `Shipment ${existingShipment.referenceNumber} - Credit Payment (Updated)`,
+            debit: parseFloat(billingData.grandTotal),
+            credit: 0,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+      }
+    }
+
+    // Update the shipment
     const shipment = await prisma.shipments.update({
       where: { id },
       data: filteredUpdates,
       include: {
         service_providers: true,
-        Customer: true, // Changed from shippers to Customer
+        Customer: true,
         consignees: true,
         shipment_boxes: true,
         product_invoice_items: true,
@@ -392,38 +320,6 @@ export async function updateAirwayBill(req, res) {
   }
 
   try {
-    // First, check if the shipment exists and if airway bill is already set
-    const existingShipment = await prisma.shipments.findUnique({
-      where: { id },
-      select: { 
-        id: true, 
-        airwayBillNumber: true, 
-        status: true,
-        referenceNumber: true
-      }
-    });
-
-    if (!existingShipment) {
-      return res.status(404).json({ error: 'Shipment not found' });
-    }
-
-    // Check if airway bill is already set (make it non-editable)
-    if (existingShipment.airwayBillNumber) {
-      return res.status(400).json({ 
-        error: 'Airway bill number has already been set and cannot be modified',
-        currentAirwayBill: existingShipment.airwayBillNumber
-      });
-    }
-
-    // Check if shipment is in a valid status for airway bill update
-    if (!['CONFIRMED', 'In Transit', 'Out for Delivery'].includes(existingShipment.status)) {
-      return res.status(400).json({ 
-        error: 'Airway bill can only be updated for shipments with status: CONFIRMED, In Transit, or Out for Delivery',
-        currentStatus: existingShipment.status
-      });
-    }
-
-    // Update the airway bill number
     const shipment = await prisma.shipments.update({
       where: { id },
       data: { 
@@ -434,16 +330,16 @@ export async function updateAirwayBill(req, res) {
         service_providers: true,
         Customer: true,
         consignees: true,
+        shipment_boxes: true,
+        product_invoice_items: true,
+        billing_invoices: true,
         User: {
           select: { id: true, name: true, email: true }
         }
-      },
+      }
     });
 
-    return res.json({
-      message: 'Airway bill number updated successfully',
-      shipment
-    });
+    return res.json(shipment);
   } catch (error) {
     console.error('Airway bill update error:', error);
     if (error.code === 'P2025') return res.status(404).json({ error: 'Shipment not found' });
@@ -451,60 +347,24 @@ export async function updateAirwayBill(req, res) {
   }
 }
 
-export async function getAirwayBillStatus(req, res) {
-  const { id } = req.params;
-
-  try {
-    const shipment = await prisma.shipments.findUnique({
-      where: { id },
-      select: { 
-        id: true, 
-        airwayBillNumber: true, 
-        status: true,
-        referenceNumber: true
-      }
-    });
-
-    if (!shipment) {
-      return res.status(404).json({ error: 'Shipment not found' });
-    }
-
-    const isEditable = !shipment.airwayBillNumber && 
-                      ['CONFIRMED', 'In Transit', 'Out for Delivery'].includes(shipment.status);
-
-    return res.json({
-      shipmentId: shipment.id,
-      referenceNumber: shipment.referenceNumber,
-      airwayBillNumber: shipment.airwayBillNumber,
-      status: shipment.status,
-      isEditable,
-      canUpdate: isEditable,
-      reason: isEditable ? 'Airway bill can be updated' : 
-              shipment.airwayBillNumber ? 'Airway bill already set' : 
-              'Shipment status does not allow airway bill update'
-    });
-  } catch (error) {
-    console.error('Airway bill status error:', error);
-    return res.status(500).json({ error: 'Failed to get airway bill status: ' + error.message });
-  }
-}
-
 export async function addShipmentEvent(req, res) {
   const { id } = req.params;
-  const { eventType, description, location, occurredAt } = req.body;
+  const { eventType, description } = req.body;
 
-  if (!eventType) return res.status(400).json({ error: 'Event type required' });
+  if (!eventType || !description) {
+    return res.status(400).json({ error: 'Event type and description are required' });
+  }
 
   try {
-    const event = await prisma.ShipmentEvent.create({
+    const event = await prisma.shipmentEvent.create({
       data: {
+        id: crypto.randomUUID(),
         shipmentId: id,
         eventType,
         description,
-        location,
-        occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
-        recordedBy: userId,
-      },
+        timestamp: new Date(),
+        createdById: req.user.sub
+      }
     });
 
     return res.status(201).json(event);
@@ -518,39 +378,103 @@ export async function confirmShipment(req, res) {
   const { id } = req.params;
 
   try {
-    // Update shipment status to CONFIRMED
-    const shipment = await prisma.shipments.update({
-      where: { id },
-      data: { status: 'CONFIRMED' },
-      include: {
-        service_providers: true,
-        Customer: true, // Changed from shippers to Customer
-        consignees: true,
-        shipment_boxes: true,
-        product_invoice_items: true,
-        billing_invoices: true,
-        User: {
-          select: { id: true, name: true, email: true }
-        }
-      }
-    });
-
-    // Import the invoice service
-    const { ShipmentInvoiceService } = await import('../services/shipmentInvoiceService.js');
+    console.log('Confirming shipment:', id);
     
-    // Create invoices for the confirmed shipment
-    const invoices = await ShipmentInvoiceService.createForShipment(id);
+    // Use Integration Service for cohesive confirmation
+    const result = await IntegrationService.confirmShipmentWithInvoices(id, req.user.sub);
 
-    return res.json({
-      shipment,
-      invoices: {
-        declaredValueInvoice: invoices.declaredValueInvoice,
-        billingInvoice: invoices.billingInvoice
-      }
-    });
+    return res.json(result);
   } catch (error) {
     console.error('Shipment confirmation error:', error);
     if (error.code === 'P2025') return res.status(404).json({ error: 'Shipment not found' });
     return res.status(500).json({ error: 'Failed to confirm shipment: ' + error.message });
+  }
+}
+
+// DELETE /api/shipments/:id - Delete shipment
+export async function deleteShipment(req, res) {
+  const { id } = req.params;
+
+  try {
+    console.log('Deleting shipment:', id);
+
+    // Perform comprehensive hard delete within transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete ledger entries created by shipment invoices
+      const shipmentInvoices = await tx.shipment_invoices.findMany({
+        where: { shipmentId: id },
+        select: { id: true, postedLedgerEntryId: true }
+      });
+
+      for (const invoice of shipmentInvoices) {
+        if (invoice.postedLedgerEntryId) {
+          await tx.ledgerEntry.deleteMany({
+            where: { id: invoice.postedLedgerEntryId }
+          });
+        }
+        
+        // Delete ledger entries linked to this invoice
+        await tx.ledgerEntry.deleteMany({
+          where: { referenceId: invoice.id }
+        });
+      }
+
+      // 2. Delete shipment invoice line items
+      await tx.shipment_invoice_line_items.deleteMany({
+        where: { shipmentInvoice: { shipmentId: id } }
+      });
+
+      // 3. Delete shipment invoices
+      await tx.shipment_invoices.deleteMany({
+        where: { shipmentId: id }
+      });
+
+      // 4. Delete billing invoices and their related ledger entries
+      const billingInvoices = await tx.billing_invoices.findMany({
+        where: { shipmentId: id },
+        select: { id: true }
+      });
+
+      for (const billingInvoice of billingInvoices) {
+        await tx.ledgerEntry.deleteMany({
+          where: { referenceId: billingInvoice.id }
+        });
+      }
+
+      await tx.billing_invoices.deleteMany({
+        where: { shipmentId: id }
+      });
+
+      // 5. Delete any ledger entries directly referencing the shipment
+      await tx.ledgerEntry.deleteMany({
+        where: { referenceId: id }
+      });
+
+      // 6. Delete product invoice items
+      await tx.product_invoice_items.deleteMany({
+        where: { shipmentId: id }
+      });
+
+      // 7. Delete shipment boxes
+      await tx.shipment_boxes.deleteMany({
+        where: { shipmentId: id }
+      });
+
+      // 8. Delete shipment events
+      await tx.shipmentEvent.deleteMany({
+        where: { shipmentId: id }
+      });
+
+      // 9. Finally delete the shipment
+      await tx.shipments.delete({
+        where: { id }
+      });
+    });
+
+    return res.json({ message: 'Shipment and all related data deleted successfully' });
+  } catch (error) {
+    console.error('Shipment deletion error:', error);
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Shipment not found' });
+    return res.status(500).json({ error: 'Failed to delete shipment: ' + error.message });
   }
 }

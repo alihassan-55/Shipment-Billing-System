@@ -78,7 +78,7 @@ model Invoice {
   total         Float
   amountPaid    Float             @default(0)
   balanceDue    Float             @default(0)
-  currency      String            @default("PKR")
+  currency      String            @default("Rs")
   status        InvoiceStatus     @default(DRAFT)
   pdfPath       String?
   createdAt     DateTime          @default(now())
@@ -134,6 +134,7 @@ model billing_invoices {
   boxCharges        Float     @default(0)
   grandTotal        Float
   paymentMethod     String
+  cashAmount        Float     @default(0)
   customerAccountId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime
@@ -238,7 +239,7 @@ model shipment_invoices {
   subtotal          Float
   tax               Float                       @default(0)
   total             Float
-  currency          String                      @default("PKR")
+  currency          String                      @default("Rs")
   status            InvoiceStatus               @default(DRAFT)
   postedLedgerEntryId String?
   issuedAt          DateTime                    @default(now())
@@ -270,6 +271,7 @@ enum InvoiceStatus {
   UNPAID
   PARTIAL
   PAID
+  ADD_TO_LEDGER
 }
 
 enum PaymentType {

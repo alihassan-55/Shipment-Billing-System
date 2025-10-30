@@ -8,8 +8,8 @@ export function cn(...inputs) {
 export function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
-  }).format(amount)
+    currency: 'PKR',
+  }).format(amount).replace('PKR', 'Rs')
 }
 
 export function formatDate(date) {

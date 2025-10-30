@@ -108,8 +108,11 @@ export const formatWeight = (weight) => {
   return `${weight.toFixed(1)} kg`;
 };
 
-export const formatCurrency = (amount, currency = 'PKR') => {
-  return `${amount.toFixed(2)} ${currency}`;
+export const formatCurrency = (amount, currency = 'Rs') => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'PKR',
+  }).format(amount).replace('PKR', currency);
 };
 
 // API utilities

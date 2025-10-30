@@ -3,26 +3,18 @@ import { Button } from "../components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
-import { Input } from "../components/ui/input"
-import { Label } from "../components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog"
 import { useDataStore } from "../stores/dataStore"
 import { useToast } from "../lib/use-toast"
 import { formatCurrency, formatDate } from "../lib/utils"
-import { FileText, Plus, Eye, Download, Printer } from "lucide-react"
-import CreateInvoiceFromShipments from "../components/CreateInvoiceFromShipments"
-import SimpleInvoiceCreator from "../components/SimpleInvoiceCreator"
-import InvoiceViewer from "../components/InvoiceViewer"
+import { Download, Edit } from "lucide-react"
 import axios from "axios"
 
 const InvoicesPage = () => {
-  const { invoices, invoicesLoading, fetchInvoices, fetchInvoice, shipments, customers } = useDataStore()
-  const [selectedInvoice, setSelectedInvoice] = useState(null)
-  const [isViewerOpen, setIsViewerOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [selectedShipments, setSelectedShipments] = useState([])
-  const [taxRate, setTaxRate] = useState(0.18)
+  const { invoices, invoicesLoading, fetchInvoices } = useDataStore()
   const { toast } = useToast()
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
+  const [selectedInvoiceForStatus, setSelectedInvoiceForStatus] = useState(null)
 
   // Debug logging
   console.log('InvoicesPage: invoices =', invoices)
@@ -36,39 +28,22 @@ const InvoicesPage = () => {
   const getStatusBadge = (status) => {
     const variants = {
       "Unpaid": "destructive",
-      "Partial": "outline",
-      "Paid": "secondary"
+      "Paid": "secondary",
+      "Add to Ledger": "outline",
+      "Partial": "outline"
     }
     return <Badge variant={variants[status] || "outline"}>{status}</Badge>
   }
 
-  const handleViewInvoice = async (invoiceId) => {
-    try {
-      const invoice = await fetchInvoice(invoiceId)
-      setSelectedInvoice(invoice)
-      setIsViewerOpen(true)
-    } catch (error) {
-      toast({
-        title: "Error loading invoice",
-        description: "Failed to load invoice details. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
   const handleDownloadPDF = async (invoiceId) => {
     try {
-      const response = await axios.post(`/invoices/${invoiceId}/pdf`, {}, {
+      // Use the main invoice PDF endpoint
+      const response = await axios.post(`/invoices/${invoiceId}/generate-pdf`, {}, {
         responseType: 'blob',
         headers: {
           'Accept': 'application/pdf'
         }
       });
-      
-      // Check if response is actually a PDF
-      if (response.data.type && response.data.type !== 'application/pdf') {
-        throw new Error('Invalid PDF response');
-      }
       
       // Create blob URL and trigger download
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -95,76 +70,37 @@ const InvoicesPage = () => {
     }
   };
 
-  const handlePrintInvoice = () => {
-    if (selectedInvoice) {
-      window.print()
-    }
-  }
+  const handleStatusChange = (invoice) => {
+    setSelectedInvoiceForStatus(invoice);
+    setIsStatusDialogOpen(true);
+  };
 
-  const handleInvoiceCreated = (createdInvoices) => {
-    // Refresh the invoices list
-    fetchInvoices()
-    
-    toast({
-      title: "Invoices created successfully",
-      description: `Created ${createdInvoices.length} invoice(s).`,
-    })
-  }
-
-  const handleCreateInvoice = async () => {
-    if (selectedShipments.length === 0) {
-      toast({
-        title: "No shipments selected",
-        description: "Please select at least one shipment to create an invoice.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Group shipments by customer
-    const shipmentsByCustomer = {};
-    selectedShipments.forEach(shipmentId => {
-      const shipment = shipments.find(s => s.id === shipmentId);
-      if (shipment) {
-        const customerId = shipment.senderId;
-        if (!shipmentsByCustomer[customerId]) {
-          shipmentsByCustomer[customerId] = [];
-        }
-        shipmentsByCustomer[customerId].push(shipmentId);
-      }
-    });
-
+  const handleUpdateStatus = async (newStatus) => {
     try {
-      // Create invoices for each customer
-      const invoicePromises = Object.entries(shipmentsByCustomer).map(async ([customerId, shipmentIds]) => {
-        const response = await axios.post('/invoices', {
-          shipmentIds,
-          customerId,
-          taxRate,
-        });
-
-        return response.data;
-      });
-
-      const createdInvoices = await Promise.all(invoicePromises);
-
-      toast({
-        title: "Invoices created successfully",
-        description: `Created ${createdInvoices.length} invoice(s) for ${selectedShipments.length} shipment(s).`,
-      });
-
-      // Reset form
-      setSelectedShipments([]);
-      setIsCreateDialogOpen(false);
+      // Convert status to uppercase for server compatibility
+      const serverStatus = newStatus === 'Add to Ledger' ? 'ADD_TO_LEDGER' : newStatus.toUpperCase();
       
-      // Refresh invoices list
-      fetchInvoices();
+      console.log('Updating status for invoice:', selectedInvoiceForStatus.id, 'to:', serverStatus);
+      console.log('Request URL:', `/invoices/${selectedInvoiceForStatus.id}/status`);
+      
+      await axios.patch(`/invoices/${selectedInvoiceForStatus.id}/status`, {
+        status: serverStatus
+      });
 
-    } catch (error) {
-      console.error('Error creating invoice:', error);
       toast({
-        title: "Error creating invoice",
-        description: error.message || "Failed to create invoice. Please try again.",
+        title: "Status updated",
+        description: `Invoice status changed to ${newStatus}`,
+      });
+
+      setIsStatusDialogOpen(false);
+      setSelectedInvoiceForStatus(null);
+      fetchInvoices(); // Refresh the list
+    } catch (error) {
+      console.error('Error updating status:', error);
+      console.error('Error details:', error.response?.data);
+      toast({
+        title: "Error updating status",
+        description: "Failed to update invoice status. Please try again.",
         variant: "destructive",
       });
     }
@@ -176,17 +112,6 @@ const InvoicesPage = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
           <p className="text-gray-600">Manage invoices and billing</p>
-        </div>
-        <div>
-          <Button 
-            onClick={() => {
-              console.log('Direct invoice button clicked');
-              setIsCreateDialogOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Invoice from Shipments
-          </Button>
         </div>
       </div>
 
@@ -227,9 +152,9 @@ const InvoicesPage = () => {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => handleViewInvoice(invoice.id)}
+                          onClick={() => handleStatusChange(invoice)}
                         >
-                          <Eye className="h-4 w-4" />
+                          <Edit className="h-4 w-4" />
                         </Button>
                         <Button 
                           variant="outline" 
@@ -248,138 +173,44 @@ const InvoicesPage = () => {
         </CardContent>
       </Card>
 
-      {/* Invoice Viewer Dialog */}
-      <Dialog open={isViewerOpen} onOpenChange={setIsViewerOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      {/* Status Change Dialog */}
+      <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Invoice Details</DialogTitle>
+            <DialogTitle>Change Invoice Status</DialogTitle>
             <DialogDescription>
-              View and manage invoice information
-            </DialogDescription>
-          </DialogHeader>
-          {selectedInvoice && (
-            <InvoiceViewer 
-              invoice={selectedInvoice}
-              onDownloadPDF={() => handleDownloadPDF(selectedInvoice.id)}
-              onPrint={handlePrintInvoice}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Invoice Creation Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Invoice from Shipments</DialogTitle>
-            <DialogDescription>
-              Select shipments to automatically create invoices. Invoices will be grouped by customer.
+              Update the payment status for invoice #{selectedInvoiceForStatus?.invoiceNumber}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-6">
-            {/* Tax Rate Setting */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Invoice Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                    <Input
-                      id="taxRate"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={taxRate * 100}
-                      onChange={(e) => setTaxRate(parseFloat(e.target.value) / 100)}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Shipments Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Available Shipments ({shipments.filter(s => !s.invoiceId).length})</CardTitle>
-                <CardDescription>
-                  Select shipments to include in the invoice. Only shipments without existing invoices are shown.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {shipments.filter(s => !s.invoiceId).length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No shipments available for invoicing. All shipments may already be invoiced.
-                  </div>
-                ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Select</TableHead>
-                          <TableHead>Tracking #</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Service</TableHead>
-                          <TableHead>Weight</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {shipments.filter(s => !s.invoiceId).map((shipment) => {
-                          const shipmentCharge = 10 + (shipment.weight * 2);
-                          const insurance = shipment.declaredValue ? shipment.declaredValue * 0.01 : 0;
-                          const codFee = shipment.codAmount ? shipment.codAmount * 0.02 : 0;
-                          const totalAmount = shipmentCharge + insurance + codFee;
-                          const customer = customers.find(c => c.id === shipment.senderId);
-
-                          return (
-                            <TableRow key={shipment.id}>
-                              <TableCell>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedShipments.includes(shipment.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedShipments(prev => [...prev, shipment.id]);
-                                    } else {
-                                      setSelectedShipments(prev => prev.filter(id => id !== shipment.id));
-                                    }
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell className="font-medium">{shipment.waybill}</TableCell>
-                              <TableCell>{customer?.name || 'Unknown'}</TableCell>
-                              <TableCell>{shipment.serviceType}</TableCell>
-                              <TableCell>{shipment.weight} kg</TableCell>
-                              <TableCell>
-                                <Badge variant="outline">{shipment.status}</Badge>
-                              </TableCell>
-                              <TableCell>{formatCurrency(totalAmount)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-3">
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                Cancel
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Button 
+                variant={selectedInvoiceForStatus?.status === 'Unpaid' ? 'default' : 'outline'}
+                className="w-full justify-start"
+                onClick={() => handleUpdateStatus('Unpaid')}
+              >
+                Unpaid
               </Button>
               <Button 
-                onClick={handleCreateInvoice}
-                disabled={selectedShipments.length === 0}
+                variant={selectedInvoiceForStatus?.status === 'Paid' ? 'default' : 'outline'}
+                className="w-full justify-start"
+                onClick={() => handleUpdateStatus('Paid')}
               >
-                Create Invoice(s) ({selectedShipments.length} selected)
+                Paid
+              </Button>
+              <Button 
+                variant={selectedInvoiceForStatus?.status === 'Add to Ledger' ? 'default' : 'outline'}
+                className="w-full justify-start"
+                onClick={() => handleUpdateStatus('Add to Ledger')}
+              >
+                Add to Ledger
+              </Button>
+            </div>
+            
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
+                Cancel
               </Button>
             </div>
           </div>

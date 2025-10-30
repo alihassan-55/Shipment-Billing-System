@@ -23,7 +23,7 @@ router.get('/shipments/:id/invoices', getShipmentInvoices);
 
 // Invoice management
 router.get('/invoices/:id', getInvoice);
-router.post('/invoices/:id/pdf', generateInvoicePDF);
+router.get('/invoices/:id/pdf', generateInvoicePDF);
 router.patch('/invoices/:id/status', updateInvoiceStatus);
 
 export default router;

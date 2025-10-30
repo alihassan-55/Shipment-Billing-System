@@ -50,7 +50,7 @@ export async function getShipmentInvoices(req, res) {
 
 /**
  * Generate PDF for a specific invoice
- * POST /api/invoices/:id/pdf
+ * GET /api/invoices/:id/pdf
  */
 export async function generateInvoicePDF(req, res) {
   const { id } = req.params;
@@ -58,11 +58,24 @@ export async function generateInvoicePDF(req, res) {
   try {
     const pdfPath = await ShipmentInvoiceService.regeneratePDF(id);
 
-    return res.json({
-      success: true,
-      pdfPath,
-      message: 'PDF generated successfully'
-    });
+    // Read the PDF file and send it as a response
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    const fullPath = path.resolve(pdfPath);
+    
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'PDF file not found' });
+    }
+
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${id}.pdf"`);
+    
+    // Send the PDF file
+    const fileStream = fs.createReadStream(fullPath);
+    fileStream.pipe(res);
+    
   } catch (error) {
     console.error('Error generating invoice PDF:', error);
     return res.status(500).json({ 
@@ -119,15 +132,33 @@ export async function updateInvoiceStatus(req, res) {
   const { id } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ['DRAFT', 'UNPAID', 'PARTIAL', 'PAID'];
+  console.log('updateInvoiceStatus called with:', { id, status });
+
+  const validStatuses = ['DRAFT', 'UNPAID', 'PARTIAL', 'PAID', 'ADD_TO_LEDGER'];
   if (!validStatuses.includes(status)) {
+    console.log('Invalid status:', status);
     return res.status(400).json({ 
       error: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
     });
   }
 
   try {
-    const invoice = await prisma.shipment_invoices.update({
+    const invoice = await prisma.shipment_invoices.findUnique({
+      where: { id },
+      include: {
+        lineItems: true
+      }
+    });
+
+    console.log('Found invoice:', invoice ? 'Yes' : 'No');
+
+    if (!invoice) {
+      console.log('Invoice not found for id:', id);
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    // Update the invoice status
+    const updatedInvoice = await prisma.shipment_invoices.update({
       where: { id },
       data: { status },
       include: {
@@ -135,9 +166,27 @@ export async function updateInvoiceStatus(req, res) {
       }
     });
 
+    // If status is "ADD_TO_LEDGER", create a ledger entry
+    if (status === 'ADD_TO_LEDGER') {
+      const totalAmount = invoice.lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      
+      await prisma.ledger_entries.create({
+        data: {
+          customerId: invoice.customerId,
+          invoiceId: invoice.id,
+          type: 'INVOICE',
+          amount: totalAmount,
+          description: `Invoice #${invoice.invoiceNumber} - Customer ID: ${invoice.customerId}`,
+          status: 'PENDING',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+    }
+
     return res.json({
       success: true,
-      invoice
+      invoice: updatedInvoice
     });
   } catch (error) {
     console.error('Error updating invoice status:', error);

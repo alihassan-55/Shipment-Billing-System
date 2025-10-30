@@ -7,6 +7,7 @@ import {
   getInvoice,
   generateInvoicePDFEndpoint,
   createInvoiceFromShipments,
+  updateInvoiceStatus,
 } from '../controllers/invoiceController.js';
 
 const router = Router();
@@ -19,6 +20,7 @@ router.post('/from-shipments', requireRoles('admin', 'accountant'), createInvoic
 router.get('/', getInvoices);
 router.get('/:id', getInvoice);
 router.post('/:id/generate-pdf', requireRoles('admin', 'accountant'), generateInvoicePDFEndpoint);
+router.patch('/:id/status', updateInvoiceStatus);
 
 export default router;
 

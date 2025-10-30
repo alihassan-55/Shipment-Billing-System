@@ -16,8 +16,9 @@ import {
   CreateEntityModal
 } from './NewShipmentFormComponents';
 
-const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
+const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
   const { token } = useAuthStore();
+  const isEditMode = !!shipment;
   
   // Form state
   const [formData, setFormData] = useState({
@@ -50,6 +51,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
     boxCharges: 0,
     grandTotal: 0,
     paymentMethod: 'Cash',
+    cashAmount: 0,
     customerAccountId: ''
   });
 
@@ -64,9 +66,16 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
   const [createModalLoading, setCreateModalLoading] = useState(false);
   const [pendingEntityName, setPendingEntityName] = useState('');
 
-  // Generate default reference number only if no phone number is provided
+  // Auto-populate reference number with customer phone number when selected
   useEffect(() => {
-    if (!formData.referenceNumber && !selectedShipper?.phone) {
+    if (selectedShipper?.phone && !isEditMode) {
+      // Use customer phone number as reference
+      setFormData(prev => ({
+        ...prev,
+        referenceNumber: selectedShipper.phone
+      }));
+    } else if (!formData.referenceNumber && !selectedShipper?.phone && !isEditMode) {
+      // Fallback to generated reference if no phone
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       setFormData(prev => ({
@@ -74,7 +83,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
         referenceNumber: `PREFIX-${date}-${random}`
       }));
     }
-  }, [selectedShipper?.phone]);
+  }, [selectedShipper?.phone, isEditMode]);
 
   // Load service providers
   useEffect(() => {
@@ -96,6 +105,71 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
 
     loadServiceProviders();
   }, []);
+
+  // Populate form when editing an existing shipment
+  useEffect(() => {
+    if (isEditMode && shipment) {
+      // Set form data
+      setFormData({
+        referenceNumber: shipment.referenceNumber || '',
+        serviceProviderId: shipment.serviceProviderId || '',
+        customerId: shipment.customerId || '',
+        consigneeId: shipment.consigneeId || '',
+        terms: shipment.terms || 'DAP',
+        actualWeightKg: shipment.actualWeightKg || 0,
+        hasVatNumber: !!shipment.vatNumber,
+        vatNumber: shipment.vatNumber || ''
+      });
+
+      // Set shipper if exists
+      if (shipment.Customer) {
+        setSelectedShipper(shipment.Customer);
+      }
+
+      // Set consignee if exists
+      if (shipment.consignees) {
+        setSelectedConsignee(shipment.consignees);
+      }
+
+      // Set boxes if they exist
+      if (shipment.shipment_boxes && shipment.shipment_boxes.length > 0) {
+        const loadedBoxes = shipment.shipment_boxes.map(box => ({
+          lengthCm: box.lengthCm || 0,
+          widthCm: box.widthCm || 0,
+          heightCm: box.heightCm || 0,
+          actualWeightKg: box.actualWeightKg || 0
+        }));
+        setBoxes(loadedBoxes);
+      }
+
+      // Set product invoice items if they exist
+      if (shipment.product_invoice_items && shipment.product_invoice_items.length > 0) {
+        const loadedItems = shipment.product_invoice_items.map(item => ({
+          description: item.description || '',
+          hsCode: item.hsCode || '',
+          pieces: item.pieces || 0,
+          unitValue: item.unitValue || 0
+        }));
+        setProductInvoiceItems(loadedItems);
+      }
+
+      // Set billing data if exists
+      if (shipment.billing_invoices) {
+        const billing = shipment.billing_invoices;
+        setBillingData({
+          ratePerKg: billing.ratePerKg || 0,
+          totalRate: billing.totalRate || 0,
+          eFormCharges: billing.eFormCharges || 0,
+          remoteAreaCharges: billing.remoteAreaCharges || 0,
+          boxCharges: billing.boxCharges || 0,
+          grandTotal: billing.grandTotal || 0,
+          paymentMethod: billing.paymentMethod || 'Cash',
+          cashAmount: billing.cashAmount || 0,
+          customerAccountId: billing.customerAccountId || ''
+        });
+      }
+    }
+  }, [isEditMode, shipment]);
 
   // Search shippers by name (existing functionality)
   const searchShippers = async (query) => {
@@ -417,8 +491,15 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
         billingInvoice: billingData
       };
 
-      const response = await fetch('http://localhost:3001/api/shipments', {
-        method: 'POST',
+      // Determine if we're creating or updating
+      const url = isEditMode 
+        ? `http://localhost:3001/api/shipments/${shipment.id}`
+        : 'http://localhost:3001/api/shipments';
+      
+      const method = isEditMode ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -427,8 +508,8 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
       });
 
       if (response.ok) {
-        const shipment = await response.json();
-        onSubmit(shipment);
+        const updatedShipment = await response.json();
+        onSubmit(updatedShipment);
       } else {
         const error = await response.json();
         alert(`Error: ${error.error}`);
@@ -446,7 +527,7 @@ const NewShipmentForm = ({ onSubmit, onCancel, user }) => {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Create New Shipment</h2>
+          <h2 className="text-2xl font-bold">{isEditMode ? 'Edit Shipment' : 'Create New Shipment'}</h2>
           <div className="flex space-x-2">
             <Button type="button" variant="outline" onClick={onCancel}>
               <X className="h-4 w-4 mr-1" />

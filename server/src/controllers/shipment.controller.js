@@ -92,3 +92,20 @@ export async function updateShipment(req, res) {
     res.status(500).json({ error: 'Failed to update shipment' });
   }
 }
+
+export async function deleteShipment(req, res) {
+  const { id } = req.params;
+
+  try {
+    const shipment = await Shipment.findByPk(id);
+    if (!shipment) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    await shipment.destroy();
+    res.json({ message: 'Shipment deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting shipment:', err);
+    res.status(500).json({ error: 'Failed to delete shipment' });
+  }
+}

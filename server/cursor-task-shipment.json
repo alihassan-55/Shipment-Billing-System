@@ -210,7 +210,7 @@
       "Performance verified for minimal API load."
     ], 
 
-    "fix_autocomplete_and_reference_logic": {
+    "Task3 fix_autocomplete_and_reference_logic": {
         "description": "Link customer phone number with shipper autofill and reference number logic.",
         "steps": [
           "In Create Shipment form, set 'Reference Number' field as the customer’s phone number.",
@@ -243,8 +243,7 @@
           "Use Mongoose `.populate('shipperId', 'name phone')` when listing shipments.",
           "Avoid unnecessary nested populations."
         ]
-      }
-    },
+      },
   
     "performance_practices": [
       "Enable pagination on shipments with limit 20 and page query parameter.",

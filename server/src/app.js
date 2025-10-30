@@ -20,6 +20,7 @@ import consigneeRoutes from './routes/consigneeRoutes.js';
 import serviceProviderRoutes from './routes/serviceProviderRoutes.js';
 import newShipmentRoutes from './routes/newShipmentRoutes.js';
 import shipmentInvoiceRoutes from './routes/shipmentInvoiceRoutes.js';
+import integrationRoutes from './routes/integrationRoutes.js';
 import { checkDatabaseConnection } from './db/client.js';
 import { searchShippersByPhone } from './controllers/customerController.js';
 import { requireAuth } from './middleware/auth.js';
@@ -58,7 +59,8 @@ app.use('/api/shippers', customerRoutes); // Map shippers to customer routes
 app.use('/api/shippers/search-by-phone', requireAuth, searchShippersByPhone); // Direct route for phone search
 app.use('/api/consignees', consigneeRoutes);
 app.use('/api/service-providers', serviceProviderRoutes);
-app.use('/api', shipmentInvoiceRoutes);
+app.use('/api/shipment-invoices', shipmentInvoiceRoutes);
+app.use('/api/integration', integrationRoutes);
 
 // 404 handler
 app.use((req, res, _next) => {

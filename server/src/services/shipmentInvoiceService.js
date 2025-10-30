@@ -1,5 +1,6 @@
 import { prisma } from '../db/client.js';
 import { generateInvoicePDF } from '../utils/pdfGenerator.js';
+import { IntegrationService } from './integrationService.js';
 import crypto from 'crypto';
 
 // Invoice number generation service
@@ -48,8 +49,10 @@ export class ShipmentInvoiceService {
         throw new Error('Shipment not found');
       }
 
-      if (shipment.status !== 'CONFIRMED') {
-        throw new Error('Can only create invoices for confirmed shipments');
+      console.log('Shipment status check:', { shipmentId, status: shipment.status, expected: 'Confirmed' });
+
+      if (shipment.status !== 'Confirmed') {
+        throw new Error(`Can only create invoices for confirmed shipments. Current status: ${shipment.status}`);
       }
 
       // Check if invoices already exist
@@ -102,7 +105,7 @@ export class ShipmentInvoiceService {
         subtotal: declaredValue,
         tax: 0,
         total: declaredValue,
-        currency: 'PKR',
+        currency: 'Rs',
         status: 'UNPAID',
         lineItems: {
           create: (shipment.product_invoice_items || []).map(item => ({
@@ -149,7 +152,7 @@ export class ShipmentInvoiceService {
     if (billing.ratePerKg && billing.totalRate) {
       lineItems.push({
         id: crypto.randomUUID(),
-        description: `Freight (${shipment.chargedWeightKg}kg @ PKR ${billing.ratePerKg}/kg)`,
+        description: `Freight (${shipment.chargedWeightKg}kg @ Rs ${billing.ratePerKg}/kg)`,
         quantity: shipment.chargedWeightKg,
         unitPrice: billing.ratePerKg,
         total: billing.totalRate,
@@ -225,7 +228,7 @@ export class ShipmentInvoiceService {
         subtotal: billing.grandTotal,
         tax: 0,
         total: billing.grandTotal,
-        currency: 'PKR',
+        currency: 'Rs',
         status: billing.paymentMethod === 'Cash' ? 'PAID' : 'UNPAID',
         lineItems: {
           create: lineItems
@@ -238,26 +241,18 @@ export class ShipmentInvoiceService {
 
     // Create ledger entry if Credit payment
     if (billing.paymentMethod === 'Credit' && billing.customerAccountId) {
-      const ledgerEntry = await tx.ledger_entries.create({
-        data: {
-          id: crypto.randomUUID(),
-          shipmentId: shipment.id,
-          customerAccountId: billing.customerAccountId,
-          amount: billing.grandTotal,
-          currency: 'PKR',
-          status: 'Pending',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
+      const ledgerEntry = await IntegrationService.createLedgerEntry(tx, {
+        customerId: shipment.customerId,
+        referenceId: invoice.id,
+        entryType: 'INVOICE',
+        description: `Shipment ${shipment.referenceNumber} - Billing Invoice ${invoice.invoiceNumber}`,
+        debit: billing.grandTotal,
+        credit: 0
       });
 
-      // Update invoice with ledger entry ID
       await tx.shipment_invoices.update({
         where: { id: invoice.id },
-        data: { 
-          postedLedgerEntryId: ledgerEntry.id,
-          status: 'PAID'
-        }
+        data: { postedLedgerEntryId: ledgerEntry.id }
       });
     }
 

@@ -100,7 +100,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
   
   doc.fontSize(28)
      .font('Helvetica-Bold')
-     .text(`$${invoice.total.toFixed(2)}`, doc.page.width - 200, 120);
+     .text(`Rs ${invoice.total.toFixed(2)}`, doc.page.width - 200, 120);
   
   doc.fontSize(12)
      .font('Helvetica')
@@ -152,8 +152,8 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
          .font('Helvetica')
          .text(item.description, tableLeft + 5, currentY + 5)
          .text(item.quantity?.toString() || '1', tableLeft + colWidths[0] + 5, currentY + 5)
-         .text(`$${item.unitPrice?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
-         .text(`$${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+         .text(`Rs ${item.unitPrice?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
+         .text(`Rs ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
       
       totalValue += item.total;
       currentY += 20;
@@ -172,7 +172,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
      .fontSize(12)
      .font('Helvetica-Bold')
      .text('Total:', tableLeft + colWidths[0] + 5, currentY + 5)
-     .text(`$${totalValue.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+     .text(`Rs ${totalValue.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
   
   // Shipment details
   doc.fontSize(16)
@@ -201,7 +201,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
   
   doc.fontSize(10)
      .font('Helvetica')
-     .text('For all shipments processed through our service, the maximum declared value for any parcel is set at $100. In the case of a lost or damaged parcel, the maximum compensation that can be claimed will not exceed $100. No claims above this amount will be accepted under any circumstances.', 50, currentY + 230, {
+     .text('For all shipments processed through our service, the maximum declared value for any parcel is set at Rs 100. In the case of a lost or damaged parcel, the maximum compensation that can be claimed will not exceed Rs 100. No claims above this amount will be accepted under any circumstances.', 50, currentY + 230, {
        width: doc.page.width - 100,
        align: 'left'
      });
@@ -254,7 +254,7 @@ function generateBillingInvoicePDF(doc, invoice) {
   
   doc.fontSize(28)
      .font('Helvetica-Bold')
-     .text(`PKR ${invoice.total.toFixed(2)}`, doc.page.width - 200, 120);
+     .text(`Rs ${invoice.total.toFixed(2)}`, doc.page.width - 200, 120);
   
   doc.fontSize(12)
      .font('Helvetica')
@@ -307,7 +307,7 @@ function generateBillingInvoicePDF(doc, invoice) {
          .text(item.description, tableLeft + 5, currentY + 5)
          .text(item.quantity ? `${item.quantity} kg` : '---', tableLeft + colWidths[0] + 5, currentY + 5)
          .text('---', tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
-         .text(`PKR ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+         .text(`Rs ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
       
       totalAmount += item.total;
       currentY += 20;
@@ -319,7 +319,7 @@ function generateBillingInvoicePDF(doc, invoice) {
      .fontSize(12)
      .font('Helvetica-Bold')
      .text('Total:', tableLeft + colWidths[0] + 5, currentY + 5)
-     .text(`PKR ${totalAmount.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+     .text(`Rs ${totalAmount.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
   
   // Shipment details
   doc.fontSize(16)
@@ -456,8 +456,8 @@ function generateMainInvoicePDF(doc, invoice) {
            .font('Helvetica')
            .text(item.description || 'Service', tableLeft + 5, currentY + 5)
            .text(item.quantity?.toString() || '1', tableLeft + colWidths[0] + 5, currentY + 5)
-           .text(`PKR ${item.unitPrice?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
-           .text(`PKR ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+           .text(`Rs ${item.unitPrice?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
+           .text(`Rs ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
         
         subtotal += item.total;
         currentY += 20;
@@ -477,17 +477,17 @@ function generateMainInvoicePDF(doc, invoice) {
        .fontSize(12)
        .font('Helvetica')
        .text('Subtotal:', tableLeft + colWidths[0] + 5, currentY + 5)
-       .text(`PKR ${subtotal.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+       .text(`Rs ${subtotal.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
     
     currentY += 20;
     doc.text('Tax:', tableLeft + colWidths[0] + 5, currentY + 5)
-       .text(`PKR ${invoice.tax?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+       .text(`Rs ${invoice.tax?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
     
     currentY += 20;
     doc.fontSize(14)
        .font('Helvetica-Bold')
        .text('Total:', tableLeft + colWidths[0] + 5, currentY + 5)
-       .text(`PKR ${invoice.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
+       .text(`Rs ${invoice.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
     
     // Payment status
     currentY += 40;
@@ -502,12 +502,12 @@ function generateMainInvoicePDF(doc, invoice) {
     
     if (invoice.amountPaid > 0) {
       currentY += 20;
-      doc.text(`Amount Paid: PKR ${invoice.amountPaid.toFixed(2)}`, 50, currentY);
+      doc.text(`Amount Paid: Rs ${invoice.amountPaid.toFixed(2)}`, 50, currentY);
     }
     
     if (invoice.balanceDue > 0) {
       currentY += 20;
-      doc.text(`Balance Due: PKR ${invoice.balanceDue.toFixed(2)}`, 50, currentY);
+      doc.text(`Balance Due: Rs ${invoice.balanceDue.toFixed(2)}`, 50, currentY);
     }
     
     // Payment history
@@ -521,7 +521,7 @@ function generateMainInvoicePDF(doc, invoice) {
       invoice.payments.forEach(payment => {
         doc.fontSize(10)
            .font('Helvetica')
-           .text(`${new Date(payment.createdAt).toLocaleDateString()} - ${payment.paymentType} - PKR ${payment.amount.toFixed(2)}`, 50, currentY);
+           .text(`${new Date(payment.createdAt).toLocaleDateString()} - ${payment.paymentType} - Rs ${payment.amount.toFixed(2)}`, 50, currentY);
         currentY += 15;
       });
     }

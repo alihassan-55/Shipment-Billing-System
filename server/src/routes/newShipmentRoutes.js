@@ -3,11 +3,12 @@ import { requireAuth } from '../middleware/auth.js';
 import {
   createShipment,
   getShipments,
-  getShipment,
+  getShipmentById,
   updateShipment,
+  deleteShipment,
   updateAirwayBill,
-  getAirwayBillStatus,
-  addShipmentEvent
+  addShipmentEvent,
+  confirmShipment
 } from '../controllers/newShipmentController.js';
 
 const router = express.Router();
@@ -22,18 +23,21 @@ router.post('/', createShipment);
 router.get('/', getShipments);
 
 // GET /api/shipments/:id - Get specific shipment
-router.get('/:id', getShipment);
+router.get('/:id', getShipmentById);
 
 // PATCH /api/shipments/:id - Update shipment
 router.patch('/:id', updateShipment);
 
+// DELETE /api/shipments/:id - Delete shipment and all related records
+router.delete('/:id', deleteShipment);
+
 // PATCH /api/shipments/:id/airway-bill - Update airway bill (late-night update)
 router.patch('/:id/airway-bill', updateAirwayBill);
 
-// GET /api/shipments/:id/airway-bill/status - Get airway bill status
-router.get('/:id/airway-bill/status', getAirwayBillStatus);
-
 // POST /api/shipments/:id/events - Add shipment event
 router.post('/:id/events', addShipmentEvent);
+
+// PATCH /api/shipments/:id/confirm - Confirm shipment and generate invoices
+router.patch('/:id/confirm', confirmShipment);
 
 export default router;

@@ -5,6 +5,7 @@
 import { prisma } from '../db/client.js';
 import { generateInvoicePDF } from '../utils/pdfGenerator.js';
 import crypto from 'crypto';
+import { IntegrationService } from '../services/integrationService.js';
 
 export async function createInvoice(req, res) {
   const { shipmentIds, customerId, issuedDate, dueDate, taxRate = 0.18 } = req.body;
@@ -41,7 +42,7 @@ export async function createInvoice(req, res) {
       // Calculate totals
       let subtotal = 0;
       const lineItems = shipments.map((shipment) => {
-        // Simple pricing: $10 base + $2 per kg
+        // Simple pricing: Rs 10 base + Rs 2 per kg
         const shipmentCharge = 10 + (shipment.weight * 2);
         const insurance = shipment.declaredValue ? shipment.declaredValue * 0.01 : 0;
         const codFee = shipment.codAmount ? shipment.codAmount * 0.02 : 0;
@@ -237,6 +238,39 @@ export async function generateInvoicePDFEndpoint(req, res) {
 /**
  * Automatically create invoice for a customer from confirmed shipments
  */
+export async function updateInvoiceStatus(req, res) {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  console.log('updateInvoiceStatus called with:', { id, status });
+
+  const validStatuses = ['DRAFT', 'UNPAID', 'PARTIAL', 'PAID', 'ADD_TO_LEDGER'];
+  if (!validStatuses.includes(status)) {
+    console.log('Invalid status:', status);
+    return res.status(400).json({ 
+      error: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
+    });
+  }
+
+  try {
+    // Use Integration Service for cohesive status update
+    const updatedInvoice = await IntegrationService.updateInvoiceStatusWithLedger(id, status, req.user.sub);
+
+    return res.json({
+      success: true,
+      invoice: updatedInvoice
+    });
+  } catch (error) {
+    console.error('Error updating invoice status:', error);
+    if (error.message === 'Invoice not found') {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    return res.status(500).json({ 
+      error: 'Failed to update invoice status: ' + error.message 
+    });
+  }
+}
+
 export async function createInvoiceFromShipments(req, res) {
   const { customerId, shipmentIds, taxRate = 0.18 } = req.body;
 

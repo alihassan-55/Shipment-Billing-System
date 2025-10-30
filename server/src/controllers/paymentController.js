@@ -1,109 +1,43 @@
 // File: paymentController.js
 // Purpose: Enhanced payment management with automatic invoice updates and ledger tracking
-// Dependencies: prisma client, ledgerService
+// Dependencies: prisma client, integrationService
 
 import { prisma } from '../db/client.js';
 import crypto from 'crypto';
+import { IntegrationService } from '../services/integrationService.js';
 
 export async function recordPayment(req, res) {
-  const { invoiceId, amount, paymentType, notes, reference, receivedBy } = req.body;
+  const { 
+    customerId,
+    amount, 
+    paymentMethod, 
+    paymentDate,
+    invoiceId, 
+    shipmentId,
+    notes, 
+    receiptNumber 
+  } = req.body;
 
-  if (!invoiceId || !amount || !paymentType) {
-    return res.status(400).json({ error: 'Invoice ID, amount, and payment type are required' });
+  if (!customerId || !amount || !paymentMethod || !paymentDate) {
+    return res.status(400).json({ 
+      error: 'Customer ID, amount, payment method, and payment date are required' 
+    });
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      // Get invoice with customer
-      const invoice = await tx.invoice.findUnique({
-        where: { id: invoiceId },
-        include: { 
-          payments: true,
-          customer: true
-        },
-      });
+    // Use Integration Service for cohesive payment recording
+    const paymentData = {
+      customerId,
+      amount,
+      paymentMethod,
+      paymentDate,
+      invoiceId,
+      shipmentId,
+      notes,
+      receiptNumber
+    };
 
-      if (!invoice) {
-        throw new Error('Invoice not found');
-      }
-
-      // Create payment
-      const payment = await tx.payment.create({
-        data: {
-          id: crypto.randomUUID(),
-          invoiceId,
-          customerId: invoice.customerId,
-          amount: parseFloat(amount),
-          paymentType,
-          notes,
-          reference,
-          receivedBy: receivedBy || req.user?.sub || req.user?.id,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-      });
-
-      // Calculate new payment total
-      const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0) + parseFloat(amount);
-      const outstanding = invoice.total - totalPaid;
-
-      // Update invoice status
-      let newStatus = 'UNPAID';
-      if (outstanding <= 0) {
-        newStatus = 'PAID';
-      } else if (totalPaid > 0) {
-        newStatus = 'PARTIAL';
-      }
-
-      // Update invoice with new totals
-      const updatedInvoice = await tx.invoice.update({
-        where: { id: invoiceId },
-        data: { 
-          amountPaid: totalPaid,
-          balanceDue: outstanding,
-          status: newStatus,
-          updatedAt: new Date()
-        },
-        include: {
-          customer: true,
-          payments: true,
-          lineItems: true
-        }
-      });
-
-      // Create ledger entry for payment
-      await tx.ledgerEntry.create({
-        data: {
-          id: crypto.randomUUID(),
-          customerId: invoice.customerId,
-          referenceId: payment.id,
-          entryType: 'PAYMENT',
-          description: `Payment received for invoice ${invoice.invoiceNumber}`,
-          debit: 0,
-          credit: parseFloat(amount),
-          balanceAfter: invoice.customer.ledgerBalance - parseFloat(amount),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-
-      // Update customer ledger balance
-      await tx.customer.update({
-        where: { id: invoice.customerId },
-        data: {
-          ledgerBalance: invoice.customer.ledgerBalance - parseFloat(amount),
-          updatedAt: new Date()
-        }
-      });
-
-      return {
-        payment,
-        invoice: updatedInvoice,
-        totalPaid,
-        outstanding,
-        status: newStatus
-      };
-    });
+    const result = await IntegrationService.recordPaymentWithIntegration(paymentData, req.user.sub);
 
     return res.status(201).json(result);
   } catch (error) {
