@@ -229,7 +229,7 @@ export class ShipmentInvoiceService {
         tax: 0,
         total: billing.grandTotal,
         currency: 'Rs',
-        status: billing.paymentMethod === 'Cash' ? 'PAID' : 'UNPAID',
+        status: 'UNPAID',
         lineItems: {
           create: lineItems
         }

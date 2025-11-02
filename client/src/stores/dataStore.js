@@ -62,6 +62,7 @@ export const useDataStore = create((set, get) => ({
   // Ledger state
   ledgerEntries: [],
   ledgerLoading: false,
+  ledgerCustomer: null,
   
   // Actions
   fetchDashboardStats: async () => {
@@ -252,14 +253,17 @@ export const useDataStore = create((set, get) => ({
   fetchLedgerEntries: async (customerId = null) => {
     set({ ledgerLoading: true })
     try {
-      const url = customerId ? `/ledger/${customerId}` : '/ledger'
+      const url = customerId ? `/ledger/customer/${customerId}` : '/ledger'
       const response = await axios.get(url)
       console.log('Ledger response:', response.data)
-      set({ ledgerEntries: response.data.entries || [], ledgerLoading: false })
+      // API returns { entries, customer, pagination } for customer route
+      const entries = response.data.entries || response.data.data || []
+      const customer = response.data.customer || null
+      set({ ledgerEntries: entries, ledgerCustomer: customer, ledgerLoading: false })
     } catch (error) {
       set({ ledgerLoading: false })
       console.error('Failed to fetch ledger entries:', error)
-      set({ ledgerEntries: [] })
+      set({ ledgerEntries: [], ledgerCustomer: null })
     }
   },
   

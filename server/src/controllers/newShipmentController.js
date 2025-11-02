@@ -71,52 +71,66 @@ export async function createShipment(req, res) {
     }
   }
 
-  try {
-    // Use Integration Service for cohesive shipment creation
-    // Calculate weights
-    const boxesWithVolumetric = (boxes || []).map((box, index) => ({
-      ...box,
-      index: box.index ?? index + 1,
-      volumetricWeightKg: calculateVolumetricWeight(
-        parseFloat(box.lengthCm),
-        parseFloat(box.widthCm),
-        parseFloat(box.heightCm)
-      )
-    }));
+  // Retry logic for duplicate referenceNumber
+  let lastError = undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      // Calculate weights
+      const boxesWithVolumetric = (boxes || []).map((box, index) => ({
+        ...box,
+        index: box.index ?? index + 1,
+        volumetricWeightKg: calculateVolumetricWeight(
+          parseFloat(box.lengthCm),
+          parseFloat(box.widthCm),
+          parseFloat(box.heightCm)
+        )
+      }));
 
-    const totalVolumeWeight = boxesWithVolumetric.reduce((sum, b) => sum + (b.volumetricWeightKg || 0), 0);
-    const totalActualWeight = boxesWithVolumetric.reduce((sum, b) => sum + (parseFloat(b.actualWeightKg || 0)), 0) || actualWeight;
-    const chargedWeightKg = Math.max(totalActualWeight, totalVolumeWeight);
+      const totalVolumeWeight = boxesWithVolumetric.reduce((sum, b) => sum + (b.volumetricWeightKg || 0), 0);
+      const totalActualWeight = boxesWithVolumetric.reduce((sum, b) => sum + (parseFloat(b.actualWeightKg || 0)), 0) || actualWeight;
+      const chargedWeightKg = Math.max(totalActualWeight, totalVolumeWeight);
 
-    const shipmentData = {
-      referenceNumber: referenceNumber || generateReferenceNumber(),
-      serviceProviderId,
-      customerId,
-      consigneeId,
-      terms,
-      boxes: boxesWithVolumetric,
-      actualWeightKg: totalActualWeight,
-      volumeWeightKg: totalVolumeWeight,
-      chargedWeightKg,
-      productInvoice,
-      billingInvoice,
-      status
-    };
+      const shipmentData = {
+        referenceNumber: attempt === 0 && referenceNumber ? referenceNumber : generateReferenceNumber(),
+        serviceProviderId,
+        customerId,
+        consigneeId,
+        terms,
+        boxes: boxesWithVolumetric,
+        actualWeightKg: totalActualWeight,
+        volumeWeightKg: totalVolumeWeight,
+        chargedWeightKg,
+        productInvoice,
+        billingInvoice,
+        status
+      };
 
-    const shipment = await IntegrationService.createShipmentWithBilling(shipmentData, req.user.sub);
-
-    return res.status(201).json(shipment);
-  } catch (error) {
-    console.error('Shipment creation error:', error);
-    console.error('Error details:', error.message);
-    console.error('Error code:', error.code);
-    console.error('Error meta:', error.meta);
-    return res.status(500).json({ 
-      error: 'Failed to create shipment: ' + error.message,
-      details: error.message,
-      code: error.code
-    });
+      const shipment = await IntegrationService.createShipmentWithBilling(shipmentData, req.user.sub);
+      return res.status(201).json(shipment);
+    } catch (error) {
+      // Check if unique constraint failed on referenceNumber
+      if (error.code === 'P2002' && error.meta && error.meta.target && error.meta.target.includes('referenceNumber')) {
+        lastError = error;
+        continue; // try again with fresh ref
+      }
+      // Otherwise, bubble up
+      console.error('Shipment creation error:', error);
+      console.error('Error details:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Error meta:', error.meta);
+      return res.status(500).json({ 
+        error: 'Failed to create shipment: ' + error.message,
+        details: error.message,
+        code: error.code
+      });
+    }
   }
+  // If failed 3 times, respond with conflict
+  return res.status(409).json({
+    error: 'Duplicate reference number, please try again.',
+    details: lastError?.message || '',
+    code: lastError?.code || ''
+  });
 }
 
 export async function getShipments(req, res) {
@@ -133,9 +147,9 @@ export async function getShipments(req, res) {
   if (referenceNumber) where.referenceNumber = { contains: referenceNumber, mode: 'insensitive' };
   if (status) where.status = status;
   if (from || to) {
-    where.createdAt = {};
-    if (from) where.createdAt.gte = new Date(from);
-    if (to) where.createdAt.lte = new Date(to);
+    where.bookedAt = {};
+    if (from) where.bookedAt.gte = new Date(from);
+    if (to) where.bookedAt.lte = new Date(to);
   }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -146,7 +160,7 @@ export async function getShipments(req, res) {
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         include: {
           service_providers: true,
           Customer: true,
@@ -225,8 +239,53 @@ export async function updateShipment(req, res) {
       return res.status(404).json({ error: 'Shipment not found' });
     }
 
-    // Filter out non-updatable fields
-    const { id: _, createdAt, createdById, ...filteredUpdates } = updateData;
+    // Enforce confirmation flow via dedicated endpoint
+    if (updateData.status === 'Confirmed' && existingShipment.status !== 'Confirmed') {
+      return res.status(400).json({ error: 'Use the confirm endpoint to confirm shipments' });
+    }
+
+    // Filter out non-updatable or non-schema fields
+    const { 
+      id: _, 
+      createdAt, 
+      createdById, 
+      serviceProviderId, 
+      customerId, 
+      consigneeId,
+      hasVatNumber, // not in schema
+      vatNumber,    // not in schema
+      boxes,        // handled at creation only
+      productInvoice, // handled via services
+      billingInvoice,  // handled below
+      ...filteredUpdates 
+    } = updateData;
+    // Whitelist scalar fields that exist on `shipments` for update
+    const allowedScalarFields = [
+      'referenceNumber',
+      'airwayBillNumber',
+      'terms',
+      'actualWeightKg',
+      'volumeWeightKg',
+      'chargedWeightKg',
+      'customsValue',
+      'bookedAt',
+      'expectedDelivery',
+      'deliveredAt',
+      'status'
+    ];
+    const safeUpdates = Object.fromEntries(
+      Object.entries(filteredUpdates).filter(([key]) => allowedScalarFields.includes(key))
+    );
+    // Only allow updating relations if explicitly changed
+    if (updateData.serviceProviderId) {
+      safeUpdates.service_providers = { connect: { id: updateData.serviceProviderId } };
+    }
+    if (updateData.customerId) {
+      safeUpdates.Customer = { connect: { id: updateData.customerId } };
+    }
+    if (updateData.consigneeId) {
+      safeUpdates.consignees = { connect: { id: updateData.consigneeId } };
+    }
 
     // Handle billing invoice updates
     if (updateData.billingInvoice) {
@@ -289,7 +348,7 @@ export async function updateShipment(req, res) {
     // Update the shipment
     const shipment = await prisma.shipments.update({
       where: { id },
-      data: filteredUpdates,
+      data: safeUpdates,
       include: {
         service_providers: true,
         Customer: true,
@@ -379,10 +438,15 @@ export async function confirmShipment(req, res) {
 
   try {
     console.log('Confirming shipment:', id);
-    
-    // Use Integration Service for cohesive confirmation
-    const result = await IntegrationService.confirmShipmentWithInvoices(id, req.user.sub);
 
+    // Update status to Confirmed (if not already)
+    await prisma.shipments.update({
+      where: { id },
+      data: { status: 'Confirmed' }
+    });
+
+    // Now generate invoices
+    const result = await IntegrationService.confirmShipmentWithInvoices(id, req.user.sub);
     return res.json(result);
   } catch (error) {
     console.error('Shipment confirmation error:', error);

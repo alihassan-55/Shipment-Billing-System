@@ -8,21 +8,35 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useDataStore } from '../stores/dataStore';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Calculator, Filter, Download, Eye } from 'lucide-react';
+import { Filter, Download } from 'lucide-react';
 
 const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
   const { 
     ledgerEntries, 
     ledgerLoading, 
+    ledgerCustomer,
     fetchLedgerEntries, 
     customers,
     fetchCustomers 
   } = useDataStore();
   
   const [selectedCustomer, setSelectedCustomer] = useState(customerId || 'all');
+  const [selectedCustomerLabel, setSelectedCustomerLabel] = useState('All customers');
   const [filterType, setFilterType] = useState('ALL');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
+
+  // Debounced fetch customers on query change
+  useEffect(() => {
+    let timer;
+    if (showCustomerFilter) {
+      timer = setTimeout(() => {
+        fetchCustomers(customerQuery ? { search: customerQuery } : {});
+      }, 300);
+    }
+    return () => clearTimeout(timer);
+  }, [customerQuery, fetchCustomers, showCustomerFilter]);
 
   useEffect(() => {
     if (showCustomerFilter && customers.length === 0) {
@@ -31,56 +45,82 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
     fetchLedgerEntries(selectedCustomer === 'all' ? null : selectedCustomer);
   }, [selectedCustomer, fetchLedgerEntries, fetchCustomers, customers.length, showCustomerFilter]);
 
-  // Calculate ledger summary
   const calculateSummary = () => {
     const totalDebits = ledgerEntries
       .filter(entry => entry.entryType === 'INVOICE')
       .reduce((sum, entry) => sum + (entry.debit || 0), 0);
-    
     const totalCredits = ledgerEntries
       .filter(entry => entry.entryType === 'PAYMENT')
       .reduce((sum, entry) => sum + (entry.credit || 0), 0);
-    
-    const netBalance = totalCredits - totalDebits;
-    
-    return { totalDebits, totalCredits, netBalance };
+    const balanceDue = totalDebits - totalCredits;
+    return { totalDebits, totalCredits, balanceDue };
   };
 
   const summary = calculateSummary();
 
-  // Filter entries based on selected filters
   const filteredEntries = ledgerEntries.filter(entry => {
     if (filterType !== 'ALL' && entry.entryType !== filterType) return false;
-    
     if (dateFrom && new Date(entry.createdAt) < new Date(dateFrom)) return false;
     if (dateTo && new Date(entry.createdAt) > new Date(dateTo)) return false;
-    
     return true;
   });
 
   const getEntryTypeBadge = (type) => {
-    const variants = {
-      'INVOICE': 'destructive',
-      'PAYMENT': 'secondary',
-      'ADJUSTMENT': 'outline',
-      'REFUND': 'outline'
-    };
+    const variants = { INVOICE: 'destructive', PAYMENT: 'secondary', ADJUSTMENT: 'outline', REFUND: 'outline' };
     return <Badge variant={variants[type] || 'outline'}>{type}</Badge>;
   };
 
-  const handleExport = () => {
-    // TODO: Implement CSV export
-    console.log('Export ledger entries');
+  const handleExport = () => { console.log('Export ledger entries'); };
+
+  const filteredCustomers = (customers || []).filter(c => {
+    if (!customerQuery) return true;
+    const q = customerQuery.toLowerCase();
+    return c.name?.toLowerCase().includes(q) || c.personName?.toLowerCase().includes(q);
+  }).slice(0, 8);
+
+  const handlePickCustomer = (id, label) => {
+    setSelectedCustomer(id);
+    setSelectedCustomerLabel(label);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Invoices</CardTitle>
+            <CardDescription>Sum of invoice debits</CardDescription>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{formatCurrency(summary.totalDebits || 0)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Payments</CardTitle>
+            <CardDescription>Sum of credits</CardDescription>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{formatCurrency(summary.totalCredits || 0)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Balance Due</CardTitle>
+            <CardDescription>Invoices minus payments</CardDescription>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{formatCurrency(summary.balanceDue || 0)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Ledger Balance</CardTitle>
+            <CardDescription>From server</CardDescription>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{formatCurrency(ledgerCustomer?.ledgerBalance || 0)}</CardContent>
+        </Card>
+      </div>
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Customer Ledger</h2>
           <p className="text-gray-600">
-            {selectedCustomer ? 'Customer-specific ledger entries' : 'All ledger entries'}
+            {selectedCustomer && selectedCustomer !== 'all' ? selectedCustomerLabel : 'All ledger entries'}
           </p>
         </div>
         <div className="flex space-x-2">
@@ -91,55 +131,6 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Debits</CardTitle>
-            <Calculator className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(summary.totalDebits)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Invoices & Charges
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Credits</CardTitle>
-            <Calculator className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(summary.totalCredits)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Payments & Refunds
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Balance</CardTitle>
-            <Calculator className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${summary.netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(summary.netBalance)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {summary.netBalance >= 0 ? 'Credit Balance' : 'Debit Balance'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -152,19 +143,28 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
             {showCustomerFilter && (
               <div className="space-y-2">
                 <Label htmlFor="customer">Customer</Label>
-                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All customers" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All customers</SelectItem>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  placeholder="Leave blank for all"
+                  value={customerQuery}
+                  onChange={(e) => setCustomerQuery(e.target.value)}
+                />
+                {customerQuery && (
+                  <div className="max-h-48 overflow-auto rounded border bg-white z-10 relative">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="px-3 py-2 text-gray-500">No customer found</div>
+                    ) : (
+                      filteredCustomers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          className="px-3 py-2 cursor-pointer hover:bg-gray-50"
+                          onClick={() => handlePickCustomer(customer.id, customer.name || customer.personName)}
+                        >
+                          {customer.name || customer.personName}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -186,44 +186,27 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
 
             <div className="space-y-2">
               <Label htmlFor="dateFrom">From Date</Label>
-              <Input
-                id="dateFrom"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="dateTo">To Date</Label>
-              <Input
-                id="dateTo"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Ledger Entries Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Ledger Entries ({filteredEntries.length})</CardTitle>
-          <CardDescription>
-            Complete transaction history with running balance
-          </CardDescription>
+          <CardTitle>Ledger Entries</CardTitle>
+          <CardDescription>Complete transaction history with running balance</CardDescription>
         </CardHeader>
         <CardContent>
           {ledgerLoading ? (
-            <div className="text-center py-8">Loading ledger entries...</div>
+            <div className="text-gray-600">Loading...</div>
           ) : filteredEntries.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Calculator className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p>No ledger entries found</p>
-              <p className="text-sm">Entries will appear here as transactions are recorded</p>
-            </div>
+            <div className="text-gray-500">No ledger entries found</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -232,11 +215,9 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Debit</TableHead>
+                    <TableHead>Credit</TableHead>
+                    <TableHead>Balance After</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -244,45 +225,10 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
                     <TableRow key={entry.id}>
                       <TableCell>{formatDate(entry.createdAt)}</TableCell>
                       <TableCell>{getEntryTypeBadge(entry.entryType)}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p className="font-medium">{entry.description}</p>
-                          {entry.customer && (
-                            <p className="text-sm text-gray-600">{entry.customer.name}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {entry.referenceId ? (
-                          <span className="text-sm text-blue-600">#{entry.referenceId}</span>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {entry.debit > 0 ? (
-                          <span className="text-red-600 font-medium">
-                            {formatCurrency(entry.debit)}
-                          </span>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {entry.credit > 0 ? (
-                          <span className="text-green-600 font-medium">
-                            {formatCurrency(entry.credit)}
-                          </span>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-medium ${
-                          (entry.balanceAfter || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {formatCurrency(entry.balanceAfter || 0)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+                      <TableCell>{entry.description}</TableCell>
+                      <TableCell>{entry.debit ? formatCurrency(entry.debit) : '-'}</TableCell>
+                      <TableCell>{entry.credit ? formatCurrency(entry.credit) : '-'}</TableCell>
+                      <TableCell>{entry.balanceAfter != null ? formatCurrency(entry.balanceAfter) : '-'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

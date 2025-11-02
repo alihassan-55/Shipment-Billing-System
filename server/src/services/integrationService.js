@@ -87,6 +87,7 @@ export class IntegrationService {
               paymentMethod: billingInvoice.paymentMethod,
               customerAccountId: billingInvoice.customerAccountId,
               createdAt: new Date(),
+              updatedAt: new Date(),
             }
           } : undefined
         },
@@ -96,17 +97,8 @@ export class IntegrationService {
         }
       });
 
-      // 2. Handle ledger entries based on payment method
-      if (billingInvoice?.paymentMethod === PAYMENT_METHODS.CREDIT && billingInvoice?.customerAccountId) {
-        await this.createLedgerEntry(tx, {
-          customerId,
-          referenceId: shipment.id,
-          entryType: LEDGER_ENTRY_TYPES.INVOICE,
-          description: REFERENCE_FORMATS.SHIPMENT(referenceNumber) + ' - Credit Payment',
-          debit: parseFloat(billingInvoice.grandTotal),
-          credit: 0
-        });
-      }
+      // 2. Do NOT create ledger entries at creation time; ledger will be updated
+      //    when invoices are generated (on confirmation) or when payments are recorded
 
       return shipment;
     });
@@ -133,11 +125,7 @@ export class IntegrationService {
       const { ShipmentInvoiceService } = await import('./shipmentInvoiceService.js');
       const invoices = await ShipmentInvoiceService.createForShipment(shipmentId);
 
-      // 3. Create main invoice for billing
-      if (shipment.billing_invoices?.[0]) {
-        const mainInvoice = await this.createMainInvoiceFromShipment(shipment, shipment.billing_invoices[0], tx);
-        invoices.mainInvoice = mainInvoice;
-      }
+      // Main customer invoice is created inside ShipmentInvoiceService.createForShipment
 
       return { shipment, invoices };
     });
