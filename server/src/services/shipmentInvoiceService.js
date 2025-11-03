@@ -400,13 +400,17 @@ export class ShipmentInvoiceService {
     });
 
     // Update customer ledger balance
-    await tx.customer.update({
-      where: { id: shipment.customerId },
-      data: {
-        ledgerBalance: shipment.Customer.ledgerBalance + billingInvoice.total,
-        updatedAt: new Date()
-      }
-    });
+    const updatedCustomer = await tx.customer.update({
+         where: { id: shipment.customerId },
+          data: {
+          ledgerBalance: { increment: billingInvoice.total },
+         updatedAt: new Date()
+          }
+        });
+          await tx.ledgerEntry.update({
+            where: { id: createdLedgerEntry.id },
+            data: { balanceAfter: updatedCustomer.ledgerBalance }
+          });
 
     return mainInvoice;
   }

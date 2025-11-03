@@ -18,7 +18,7 @@ const CreateInvoiceFromShipments = ({ onInvoiceCreated }) => {
   const [taxRate, setTaxRate] = useState(0.18);
   const [isCreating, setIsCreating] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const { shipments, customers, fetchShipments, fetchCustomers } = useDataStore();
   const { toast } = useToast();
 
@@ -50,12 +50,12 @@ const CreateInvoiceFromShipments = ({ onInvoiceCreated }) => {
     return selectedShipments.reduce((total, shipmentId) => {
       const shipment = availableShipments.find(s => s.id === shipmentId);
       if (!shipment) return total;
-      
+
       // Simple pricing calculation (same as backend)
       const shipmentCharge = 10 + (shipment.weight * 2);
       const insurance = shipment.declaredValue ? shipment.declaredValue * 0.01 : 0;
       const codFee = shipment.codAmount ? shipment.codAmount * 0.02 : 0;
-      
+
       return total + shipmentCharge + insurance + codFee;
     }, 0);
   };
@@ -83,7 +83,7 @@ const CreateInvoiceFromShipments = ({ onInvoiceCreated }) => {
     selectedShipments.forEach(shipmentId => {
       const shipment = availableShipments.find(s => s.id === shipmentId);
       if (shipment) {
-        const customerId = shipment.senderId;
+        const customerId = shipment.customerId
         if (!shipmentsByCustomer[customerId]) {
           shipmentsByCustomer[customerId] = [];
         }
@@ -127,7 +127,7 @@ const CreateInvoiceFromShipments = ({ onInvoiceCreated }) => {
       setSelectedShipments([]);
       setDueDate('');
       setIsOpen(false);
-      
+
       // Notify parent component
       if (onInvoiceCreated) {
         onInvoiceCreated(createdInvoices);
@@ -252,7 +252,7 @@ const CreateInvoiceFromShipments = ({ onInvoiceCreated }) => {
                           const insurance = shipment.declaredValue ? shipment.declaredValue * 0.01 : 0;
                           const codFee = shipment.codAmount ? shipment.codAmount * 0.02 : 0;
                           const totalAmount = shipmentCharge + insurance + codFee;
-                          const customer = customers.find(c => c.id === shipment.senderId);
+                          const customer = customers.find(c => c.id === shipment.customerId);
 
                           return (
                             <TableRow key={shipment.id}>
@@ -316,7 +316,7 @@ const CreateInvoiceFromShipments = ({ onInvoiceCreated }) => {
             <Button variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleCreateInvoice}
               disabled={selectedShipments.length === 0 || isCreating}
             >

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
@@ -26,6 +26,7 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [customerQuery, setCustomerQuery] = useState('');
+  const customersFetchedRef = useRef(false);
 
   // Debounced fetch customers on query change
   useEffect(() => {
@@ -39,11 +40,12 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
   }, [customerQuery, fetchCustomers, showCustomerFilter]);
 
   useEffect(() => {
-    if (showCustomerFilter && customers.length === 0) {
+    if (showCustomerFilter && !customersFetchedRef.current) {
       fetchCustomers();
+      customersFetchedRef.current = true;
     }
     fetchLedgerEntries(selectedCustomer === 'all' ? null : selectedCustomer);
-  }, [selectedCustomer, fetchLedgerEntries, fetchCustomers, customers.length, showCustomerFilter]);
+  }, [selectedCustomer, fetchLedgerEntries, fetchCustomers, showCustomerFilter]);
 
   const calculateSummary = () => {
     const totalDebits = ledgerEntries

@@ -12,6 +12,8 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  const API_BASE_URL = import.meta.env.VITE_API_TARGET ?? 'http://localhost:3001';
+
   // Load invoices when component mounts or shipmentId changes
   useEffect(() => {
     if (shipmentId) {
@@ -30,7 +32,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     setLoading(true);
     console.log('Loading invoices for shipment:', shipmentId, 'status:', shipmentStatus);
     try {
-      const response = await fetch(`http://localhost:3001/api/shipment-invoices/shipments/${shipmentId}/invoices`, {
+       const response = await fetch(`${API_BASE_URL}/api/shipment-invoices/shipments/${shipmentId}/invoices`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -53,7 +55,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const generateInvoices = async () => {
     setGenerating(true);
     try {
-      const response = await fetch(`http://localhost:3001/api/shipment-invoices/shipments/${shipmentId}/generate-invoices`, {
+      const response = await fetch(`${API_BASE_URL}/api/shipment-invoices/shipments/${shipmentId}/generate-invoices`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -78,7 +80,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
 
   const regeneratePDF = async (invoiceId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/invoices/${invoiceId}/pdf`, {
+      const response = await fetch(`http://${API_BASE_URL}/api/invoices/${invoiceId}/pdf`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -101,7 +103,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const downloadPDF = (pdfUrl) => {
     if (pdfUrl) {
       // Construct full URL with server address
-      const fullUrl = pdfUrl.startsWith('http') ? pdfUrl : `http://localhost:3001${pdfUrl}`;
+      const fullUrl = pdfUrl.startsWith('http') ? pdfUrl : `http://${API_BASE_URL}${pdfUrl}`;
       window.open(fullUrl, '_blank');
     } else {
       alert('PDF not available yet. Please regenerate PDF.');

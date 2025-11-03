@@ -27,51 +27,75 @@ import { requireAuth } from './middleware/auth.js';
 
 dotenv.config();
 
-const app = express();
+export function createApp() {
+  const app = express();
 
-app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-app.use(morgan('dev'));
+  app.use(helmet());
+  app.use(cors({ origin: true, credentials: true }));
+  app.use(express.json());
+  app.use(morgan('dev'));
 
-// Serve static files (PDFs)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  // Serve static files (PDFs)
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-app.get('/api/health', async (_req, res) => {
-  const dbConnected = await checkDatabaseConnection();
-  res.json({ 
-    status: 'ok', 
-    env: process.env.NODE_ENV || 'development',
-    database: dbConnected ? 'connected' : 'disconnected',
-    timestamp: new Date().toISOString()
+  // Serve built client files in production
+  if (process.env.NODE_ENV === 'production') {
+    const clientBuildPath = path.join(__dirname, '../../client/dist');
+    app.use(express.static(clientBuildPath));
+  }
+
+  app.get('/api/health', async (_req, res) => {
+    const dbConnected = await checkDatabaseConnection();
+    res.json({ 
+      status: 'ok', 
+      env: process.env.NODE_ENV || 'development',
+      database: dbConnected ? 'connected' : 'disconnected',
+      timestamp: new Date().toISOString()
+    });
   });
-});
 
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/shipments', newShipmentRoutes);
-app.use('/api/invoices', invoiceRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/ledger', ledgerRoutes);
-app.use('/api/bulk-import', bulkImportRoutes);
-app.use('/api/shippers', customerRoutes); // Map shippers to customer routes
-app.use('/api/shippers/search-by-phone', requireAuth, searchShippersByPhone); // Direct route for phone search
-app.use('/api/consignees', consigneeRoutes);
-app.use('/api/service-providers', serviceProviderRoutes);
-app.use('/api/shipment-invoices', shipmentInvoiceRoutes);
-app.use('/api/integration', integrationRoutes);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/customers', customerRoutes);
+  app.use('/api/shipments', newShipmentRoutes);
+  app.use('/api/invoices', invoiceRoutes);
+  app.use('/api/payments', paymentRoutes);
+  app.use('/api/ledger', ledgerRoutes);
+  app.use('/api/bulk-import', bulkImportRoutes);
+  app.use('/api/shippers', customerRoutes); // Map shippers to customer routes
+  app.use('/api/shippers/search-by-phone', requireAuth, searchShippersByPhone); // Direct route for phone search
+  app.use('/api/consignees', consigneeRoutes);
+  app.use('/api/service-providers', serviceProviderRoutes);
+  app.use('/api/shipment-invoices', shipmentInvoiceRoutes);
+  app.use('/api/integration', integrationRoutes);
 
-// 404 handler
-app.use((req, res, _next) => {
-  res.status(404).json({ error: 'Not Found', path: req.path });
-});
+  // Serve client app for all non-API routes in production
+  if (process.env.NODE_ENV === 'production') {
+    app.get('*', (req, res) => {
+      // Don't handle API routes here
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'Not Found', path: req.path });
+      }
+      // Serve index.html for client-side routing
+      res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+    });
+  } else {
+    // 404 handler for development
+    app.use((req, res, _next) => {
+      res.status(404).json({ error: 'Not Found', path: req.path });
+    });
+  }
 
-// Error handler
-// eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
-  const status = err.status || 500;
-  res.status(status).json({ error: err.message || 'Internal Server Error' });
-});
+  // Error handler
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, _req, res, _next) => {
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Internal Server Error' });
+  });
 
+  return app;
+}
+
+// Create default app instance for backward compatibility
+const app = createApp();
 export default app;

@@ -11,10 +11,10 @@ const InvoiceViewer = ({ invoice, onDownloadPDF, onPrint }) => {
 
   const getStatusBadge = (status) => {
     const variants = {
-      "UNPAID": "destructive",
-      "PARTIAL": "outline", 
-      "PAID": "secondary",
-      "DRAFT": "outline"
+      "Unpaid": "destructive",
+      "Partial": "outline", 
+      "Paid": "secondary",
+      "Add to Ledger": "outline"
     };
     return <Badge variant={variants[status] || "outline"}>{status}</Badge>;
   };
@@ -100,7 +100,7 @@ const InvoiceViewer = ({ invoice, onDownloadPDF, onPrint }) => {
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center text-gray-700">
-                      {item.quantity || 1}
+                      {item.quantity ? `${item.quantity} kg` : '—'}
                     </td>
                     <td className="py-4 px-4 text-right text-gray-700">
                       {formatCurrency(item.unitPrice)}

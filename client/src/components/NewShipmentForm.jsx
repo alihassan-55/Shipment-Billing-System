@@ -118,7 +118,8 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
         terms: shipment.terms || 'DAP',
         actualWeightKg: shipment.actualWeightKg || 0,
         hasVatNumber: !!shipment.vatNumber,
-        vatNumber: shipment.vatNumber || ''
+        vatNumber: shipment.vatNumber || '',
+        status: shipment.status || 'Draft'
       });
 
       // Set shipper if exists
@@ -300,7 +301,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
   const handlePhoneChange = (phone) => {
     console.log('Phone changed to:', phone);
     // Update the selected shipper phone
-    setSelectedShipper(prev => ({ ...prev, phone }));
+    setSelectedShipper(prev => ({ ...(prev ?? {}), phone }));
     
     // Set reference number to phone number (or clear if phone is empty)
     if (phone && phone.trim()) {
@@ -653,7 +654,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                 <Input
                   id="shipperAddress"
                   value={selectedShipper?.address || ''}
-                  onChange={(e) => setSelectedShipper(prev => ({ ...prev, address: e.target.value }))}
+                  onChange={(e) => setSelectedShipper(prev => ({ ...(prev ?? {}), address: e.target.value }))}
                   required
                   placeholder="Address"
                 />
@@ -663,7 +664,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                 <Input
                   id="shipperCity"
                   value={selectedShipper?.city || ''}
-                  onChange={(e) => setSelectedShipper(prev => ({ ...prev, city: e.target.value }))}
+                  onChange={(e) => setSelectedShipper(prev => ({ ...(prev ?? {}), city: e.target.value }))}
                   required
                   placeholder="City"
                 />
@@ -677,7 +678,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                   id="shipperEmail"
                   type="email"
                   value={selectedShipper?.email || ''}
-                  onChange={(e) => setSelectedShipper(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => setSelectedShipper(prev => ({ ...(prev ?? {}), email: e.target.value }))}
                   placeholder="Email (optional)"
                 />
               </div>
@@ -749,7 +750,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                 <Input
                   id="consigneePhone"
                   value={selectedConsignee?.phone || ''}
-                  onChange={(e) => setSelectedConsignee(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => setSelectedConsignee(prev => ({ ...(prev ?? {}), phone: e.target.value }))}
                   required
                   placeholder="Phone number"
                 />
@@ -762,7 +763,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                 <Input
                   id="consigneeAddress"
                   value={selectedConsignee?.address || ''}
-                  onChange={(e) => setSelectedConsignee(prev => ({ ...prev, address: e.target.value }))}
+                  onChange={(e) => setSelectedConsignee(prev => ({ ...(prev ?? {}), address: e.target.value }))}
                   required
                   placeholder="Address"
                 />
@@ -772,7 +773,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                 <Input
                   id="consigneeCity"
                   value={selectedConsignee?.city || ''}
-                  onChange={(e) => setSelectedConsignee(prev => ({ ...prev, city: e.target.value }))}
+                  onChange={(e) => setSelectedConsignee(prev => ({ ...(prev ?? {}), city: e.target.value }))}
                   required
                   placeholder="City"
                 />
@@ -786,7 +787,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                   id="consigneeEmail"
                   type="email"
                   value={selectedConsignee?.email || ''}
-                  onChange={(e) => setSelectedConsignee(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => setSelectedConsignee(prev => ({ ...(prev ?? {}), email: e.target.value }))}
                   placeholder="Email (optional)"
                 />
               </div>
@@ -795,7 +796,7 @@ const NewShipmentForm = ({ shipment, onSubmit, onCancel, user }) => {
                 <Input
                   id="consigneeCountry"
                   value={selectedConsignee?.country || ''}
-                  onChange={(e) => setSelectedConsignee(prev => ({ ...prev, country: e.target.value }))}
+                  onChange={(e) => setSelectedConsignee(prev => ({ ...(prev ?? {}), country: e.target.value }))}
                   required
                   placeholder="Country"
                 />

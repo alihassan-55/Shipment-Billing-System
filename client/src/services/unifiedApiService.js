@@ -4,8 +4,18 @@
 import { createApiResponse, validateCrossReference } from '../types/integration.js';
 
 class UnifiedApiService {
-  constructor(baseURL = 'http://localhost:3001/api') {
-    this.baseURL = baseURL;
+  constructor(baseURL = null) {
+    // Use environment variable if available, otherwise fall back to default
+    // In production, use relative URL for same-origin requests
+    const envBaseURL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
+    if (envBaseURL) {
+      this.baseURL = envBaseURL.endsWith('/api') ? envBaseURL : `${envBaseURL}/api`;
+    } else if (baseURL) {
+      this.baseURL = baseURL;
+    } else {
+      // Use relative URL in production (same origin), absolute in development
+      this.baseURL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
+    }
   }
 
   // Generic API call method

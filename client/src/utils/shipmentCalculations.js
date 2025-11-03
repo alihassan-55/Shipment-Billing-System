@@ -137,7 +137,8 @@ export const apiRequest = async (url, options = {}) => {
     }
   };
 
-  const response = await fetch(url, { ...defaultOptions, ...options });
+  const mergedHeaders = { ...defaultOptions.headers, ...(options && options.headers) };
+  const response = await fetch(url, { ...defaultOptions, ...options, headers: mergedHeaders });
   
   if (!response.ok) {
     const error = await response.json();
