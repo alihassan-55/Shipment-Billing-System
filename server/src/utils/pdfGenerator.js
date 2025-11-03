@@ -553,5 +553,3 @@ function generateGenericInvoicePDF(doc, invoiceId) {
       .text(`Invoice ID: ${invoiceId}`, 50, 150)
       .text(`Generated: ${new Date().toLocaleString()}`, 50, 170);
 }
-
-

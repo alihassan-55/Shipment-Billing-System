@@ -6,5 +6,5 @@ node_modules
 server/uploads
 server/prisma/migrations
 client/dist
-
+docs/
 

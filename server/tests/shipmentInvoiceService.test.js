@@ -3,30 +3,30 @@ import { ShipmentInvoiceService } from '../src/services/shipmentInvoiceService.j
 
 // Mock Prisma client
 const mockPrisma = {
-  $transaction: jest.fn(),
+  $transaction: vi.fn(),
   shipment_invoices: {
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    count: jest.fn()
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    count: vi.fn()
   },
   shipments: {
-    findUnique: jest.fn()
+    findUnique: vi.fn()
   },
   ledger_entries: {
-    create: jest.fn()
+    create: vi.fn()
   }
 };
 
 // Mock the prisma import
-jest.mock('../src/db/client.js', () => ({
+vi.mock('../src/db/client.js', () => ({
   prisma: mockPrisma
 }));
 
 describe('ShipmentInvoiceService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('createForShipment', () => {
@@ -142,6 +142,7 @@ describe('ShipmentInvoiceService', () => {
     });
   });
 });
+
 
 
 

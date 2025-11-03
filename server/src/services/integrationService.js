@@ -352,8 +352,9 @@ export class IntegrationService {
       select: { ledgerBalance: true }
     });
 
-    const netAmount = (credit || 0) - (debit || 0);
-    const newBalance = customer.ledgerBalance + netAmount;
+   const debitAmount = Number(debit) || 0;
+ const creditAmount = Number(credit) || 0;
+const newBalance = customer.ledgerBalance + debitAmount - creditAmount;
 
     const ledgerEntry = await tx.ledgerEntry.create({
       data: {
