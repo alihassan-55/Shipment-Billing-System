@@ -48,6 +48,9 @@ RUN npm prune --production
 
 WORKDIR /app
 
+# Set NODE_ENV to production
+ENV NODE_ENV=production
+
 # Expose port
 EXPOSE 3001
 
