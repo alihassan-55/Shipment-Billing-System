@@ -8,6 +8,7 @@ import { Checkbox } from './ui/checkbox';
 import { Package, Calculator, Save, X, Plus } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { debounce } from '../utils/shipmentCalculations';
+import { getApiUrl } from '../utils/apiConfig';
 import { 
   TypeaheadInput, 
   BoxDimensions, 

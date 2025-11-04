@@ -106,7 +106,7 @@ const ShipmentsPage = () => {
   // Handle airway bill update
   const handleAirwayBillUpdate = async (shipmentId, airwayBillNumber) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}/airway-bill`, {
+      const response = await fetch(`${API_BASE_URL}/api/shipments/${shipmentId}/airway-bill`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +142,7 @@ const ShipmentsPage = () => {
   // Handle shipment confirmation
   const handleShipmentConfirmation = async (shipmentId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/shipment-invoices/shipments/${shipmentId}/confirm`, {
+      const response = await fetch(`${API_BASE_URL}/api/shipment-invoices/shipments/${shipmentId}/confirm`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -181,7 +181,7 @@ const ShipmentsPage = () => {
     if (!confirm('Are you sure you want to delete this shipment?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/shipments/${shipmentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
