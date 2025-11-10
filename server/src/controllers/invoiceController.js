@@ -226,29 +226,47 @@ export async function generateInvoicePDFEndpoint(req, res) {
 
     console.log(`Found invoice: ${invoice.invoiceNumber}`);
 
-    // Generate PDF with invoice data
-    const pdfPath = await generateInvoicePDF(id, 'MAIN', invoice);
-    console.log(`PDF generated at: ${pdfPath}`);
-    
-    // Update invoice with PDF path
-    await prisma.invoice.update({
-      where: { id },
-      data: { pdfPath },
-    });
-
-    // Send the PDF file with CORS headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`);
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
-    const fs = await import('fs/promises');
-    const pdfBuffer = await fs.readFile(pdfPath);
-    console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
-    
-    res.status(200).send(pdfBuffer);
+
+    try {
+      // Generate PDF with invoice data
+      const pdfPath = await generateInvoicePDF(id, 'MAIN', invoice);
+      console.log(`PDF generated at: ${pdfPath}`);
+      
+      // Get the absolute path
+      const { fileURLToPath } = await import('url');
+      const { dirname } = await import('path');
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const absolutePdfPath = path.join(__dirname, '../..', pdfPath);
+      
+      // Update invoice with PDF path
+      await prisma.invoice.update({
+        where: { id },
+        data: { pdfPath },
+      });
+
+      // Set PDF response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`);
+      
+      // Read and send PDF
+      const fs = await import('fs/promises');
+      const pdfBuffer = await fs.readFile(absolutePdfPath);
+      console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
+      
+      return res.status(200).send(pdfBuffer);
+    } catch (pdfError) {
+      console.error('Error generating or sending PDF:', pdfError);
+      return res.status(500).json({ 
+        error: 'Failed to generate PDF', 
+        details: pdfError.message 
+      });
+    }
   } catch (error) {
     console.error('Error generating PDF:', error);
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');

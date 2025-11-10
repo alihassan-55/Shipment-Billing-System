@@ -67,8 +67,26 @@ export function createApp() {
   app.use(express.json());
   app.use(morgan('dev'));
 
-  // Serve static files (PDFs)
-  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  // Create uploads directory if it doesn't exist
+  const uploadsDir = path.join(__dirname, '../uploads');
+  const invoicesDir = path.join(uploadsDir, 'invoices');
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.mkdirSync(invoicesDir, { recursive: true });
+  
+  // Serve static files (PDFs) with CORS headers
+  app.use('/uploads', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+  }, express.static(uploadsDir, {
+    setHeaders: (res, path) => {
+      if (path.endsWith('.pdf')) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline');
+      }
+    }
+  }));
 
   // Serve built client files if they exist (production or development with build)
   const clientBuildPath = path.join(__dirname, '../../client/dist');
