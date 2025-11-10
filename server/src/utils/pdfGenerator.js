@@ -9,63 +9,74 @@ const __dirname = path.dirname(__filename);
 // Enhanced PDF generation for shipment invoices
 
 export async function generateInvoicePDF(invoiceId, type = null, invoiceData = null) {
-   // Create uploads directory if it doesn't exist
-   const uploadsDir = path.join(__dirname, '../../uploads/invoices');
-   await fs.promises.mkdir(uploadsDir, { recursive: true });
+  // Create uploads directory if it doesn't exist
+  const uploadsDir = path.join(__dirname, '../../uploads/invoices');
+  await fs.promises.mkdir(uploadsDir, { recursive: true });
 
-   const pdfPath = path.join(uploadsDir, `invoice-${invoiceId}.pdf`);
+  // Generate PDF file path
+  const pdfPath = path.join(uploadsDir, `invoice-${invoiceId}.pdf`);
+  
+  // Clean up old file if it exists
+  try {
+    await fs.promises.unlink(pdfPath);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('Error cleaning up old PDF:', err);
+    }
+  }
 
-   return new Promise((resolve, reject) => {
-      try {
-         // Create PDF document
-         const doc = new PDFDocument({
+  return new Promise((resolve, reject) => {
+    try {
+      // Create PDF document
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 50,
+        info: {
+          Title: `Shipment Receipt - ${type}`,
+          Author: 'Courier Billing System',
+          Subject: 'Shipment Invoice'
+        }
+      });
 
-            size: 'A4',
-            margin: 50,
-            info: {
-               Title: `Shipment Receipt - ${type}`,
-               Author: 'Courier Billing System',
-               Subject: 'Shipment Invoice'
-            }
-         });
+      // Create write stream for PDF file
+      const writeStream = fs.createWriteStream(pdfPath);
 
-         // Create write stream for PDF file
-         const writeStream = fs.createWriteStream(pdfPath);
+      // Handle stream events
+      writeStream.on('error', (error) => {
+        console.error('PDF write stream error:', error);
+        reject(error);
+      });
 
-         // Handle stream events
-         writeStream.on('error', (error) => {
-            console.error('PDF write stream error:', error);
-            reject(error);
-         });
+      writeStream.on('finish', () => {
+        console.log(`PDF generated successfully at: ${pdfPath}`);
+        // Return the path relative to uploads directory for serving via static middleware
+        resolve(`/uploads/invoices/invoice-${invoiceId}.pdf`);
+      });
 
-         writeStream.on('finish', () => {
-            console.log(`PDF generated successfully: ${pdfPath}`);
-            resolve(`/uploads/invoices/invoice-${invoiceId}.pdf`);
-         });
+      // Pipe PDF to file
+      doc.pipe(writeStream);
 
-         // Pipe PDF to file
-         doc.pipe(writeStream);
-
-         // Generate PDF content based on invoice type
-         if (type === 'DECLARED_VALUE') {
-            generateDeclaredValueInvoicePDF(doc, invoiceData);
-         } else if (type === 'BILLING') {
-            generateBillingInvoicePDF(doc, invoiceData);
-         } else if (type === 'MAIN') {
-            generateMainInvoicePDF(doc, invoiceData);
-         } else {
-            generateGenericInvoicePDF(doc, invoiceId);
-         }
-
-         // Finalize PDF
-         doc.end();
-      } catch (error) {
-         console.error('PDF generation error:', error);
-         reject(error);
+      // Generate PDF content based on invoice type
+      if (type === 'DECLARED_VALUE') {
+        generateDeclaredValueInvoicePDF(doc, invoiceData);
+      } else if (type === 'BILLING') {
+        generateBillingInvoicePDF(doc, invoiceData);
+      } else if (type === 'MAIN') {
+        generateMainInvoicePDF(doc, invoiceData);
+      } else {
+        generateGenericInvoicePDF(doc, invoiceId);
       }
-   });
 
- 
+      // Finalize PDF - this triggers the 'finish' event
+      doc.end();
+    } catch (error) {
+      console.error('Error in PDF generation:', error);
+      if (writeStream) {
+        writeStream.end();
+      }
+      reject(error);
+    }
+  });
 }
 
 // Generate Declared Value Invoice PDF

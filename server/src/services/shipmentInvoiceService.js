@@ -383,7 +383,16 @@ export class ShipmentInvoiceService {
       }
     });
 
-    // Create ledger entry
+    // Update customer first to get the new balance
+    const updatedCustomer = await tx.customer.update({
+      where: { id: shipment.customerId },
+      data: {
+        ledgerBalance: { increment: billingInvoice.total },
+        updatedAt: new Date()
+      }
+    });
+
+    // Create ledger entry with correct balance
     await tx.ledgerEntry.create({
       data: {
         id: crypto.randomUUID(),
@@ -393,24 +402,11 @@ export class ShipmentInvoiceService {
         description: `Invoice ${invoiceNumber} created for shipment ${shipment.referenceNumber}`,
         debit: billingInvoice.total,
         credit: 0,
-        balanceAfter: shipment.Customer.ledgerBalance + billingInvoice.total,
+        balanceAfter: updatedCustomer.ledgerBalance,
         createdAt: new Date(),
         updatedAt: new Date()
       }
     });
-
-    // Update customer ledger balance
-    const updatedCustomer = await tx.customer.update({
-         where: { id: shipment.customerId },
-          data: {
-          ledgerBalance: { increment: billingInvoice.total },
-         updatedAt: new Date()
-          }
-        });
-          await tx.ledgerEntry.update({
-            where: { id: createdLedgerEntry.id },
-            data: { balanceAfter: updatedCustomer.ledgerBalance }
-          });
 
     return mainInvoice;
   }

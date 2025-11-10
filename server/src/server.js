@@ -13,7 +13,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {How 
+    for (const iface of interfaces[name]) {
       // Skip internal (loopback) addresses and IPv6
       if (iface.family === 'IPv4' && !iface.internal) {
         return iface.address;
