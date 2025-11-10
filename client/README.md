@@ -43,11 +43,6 @@ A modern React frontend for the Courier Management System built with Vite, Tailw
 
 The frontend automatically proxies API calls to the backend server running on `http://localhost:3001`. Make sure your backend server is running before using the frontend.
 
-## Demo Credentials
-
-- **Email:** admin@example.com
-- **Password:** admin123
-
 ## Available Scripts
 
 - `npm run dev` - Start development server

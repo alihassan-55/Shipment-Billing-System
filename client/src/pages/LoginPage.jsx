@@ -71,7 +71,7 @@ const LoginPage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="admin@example.com"
+                  placeholder="Enter your email"
                 />
               </div>
               <div>
@@ -92,10 +92,7 @@ const LoginPage = () => {
           </CardContent>
         </Card>
         
-        <div className="text-center text-sm text-gray-600">
-          <p>Demo credentials:</p>
-          <p className="font-mono">admin@example.com / admin123</p>
-        </div>
+        {/* Demo credentials section removed */}
       </div>
     </div>
   )
