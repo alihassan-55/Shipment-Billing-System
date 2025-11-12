@@ -12,6 +12,7 @@ import NewShipmentForm from "../components/NewShipmentForm";
 import ShipmentInvoicesPanel from "../components/ShipmentInvoicesPanel";
 import { useAuthStore } from "../stores/authStore";
 import { debounce } from "../utils/shipmentCalculations";
+import apiService from "../services/unifiedApiService";
 
 const ShipmentsPage = () => {
   const { token, user } = useAuthStore();
@@ -42,16 +43,11 @@ const ShipmentsPage = () => {
       if (searchTerm) params.append('referenceNumber', searchTerm);
       if (statusFilter) params.append('status', statusFilter);
 
-      const response = await fetch(`http://localhost:3001/api/shipments?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiService.getShipments(Object.fromEntries(params));
       
-      if (response.ok) {
-        const data = await response.json();
-        setShipments(data.shipments);
-        setPagination(data.pagination);
+      if (response.success) {
+        setShipments(response.data.shipments);
+        setPagination(response.data.pagination);
       } else {
         throw new Error('Failed to load shipments');
       }
@@ -106,18 +102,10 @@ const ShipmentsPage = () => {
   // Handle airway bill update
   const handleAirwayBillUpdate = async (shipmentId, airwayBillNumber) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/shipments/${shipmentId}/airway-bill`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ airwayBillNumber })
-      });
+      const response = await apiService.updateShipmentAirwayBill(shipmentId, airwayBillNumber);
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update airway bill');
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update airway bill');
       }
       
       toast({
@@ -142,16 +130,9 @@ const ShipmentsPage = () => {
   // Handle shipment confirmation
   const handleShipmentConfirmation = async (shipmentId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/shipment-invoices/shipments/${shipmentId}/confirm`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiService.confirmShipment(shipmentId);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.success) {
         toast({
           title: "Success",
           description: "Shipment confirmed and invoices generated successfully",
@@ -159,10 +140,9 @@ const ShipmentsPage = () => {
         loadShipments();
         setIsDetailDialogOpen(false);
       } else {
-        const errorData = await response.json();
         toast({
           title: "Error",
-          description: errorData.error || "Failed to confirm shipment",
+          description: response.error || "Failed to confirm shipment",
           variant: "destructive",
         });
       }
@@ -181,14 +161,9 @@ const ShipmentsPage = () => {
     if (!confirm('Are you sure you want to delete this shipment?')) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/shipments/${shipmentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiService.deleteShipment(shipmentId);
       
-      if (!response.ok) {
+      if (!response.success) {
         throw new Error('Failed to delete shipment');
       }
       

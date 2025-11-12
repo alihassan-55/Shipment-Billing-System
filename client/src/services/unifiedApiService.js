@@ -2,54 +2,64 @@
 // This provides consistent API calls across all components
 
 import { createApiResponse, validateCrossReference } from '../types/integration.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 class UnifiedApiService {
   constructor(baseURL = null) {
-    // Use environment variable if available, otherwise fall back to default
-    // In production, use relative URL for same-origin requests
-    const envBaseURL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
-    if (envBaseURL) {
-      this.baseURL = envBaseURL.endsWith('/api') ? envBaseURL : `${envBaseURL}/api`;
-    } else if (baseURL) {
-      this.baseURL = baseURL;
-    } else {
-      // Use relative URL in production (same origin), absolute in development
-      this.baseURL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
-    }
+    // Use a relative URL. Vite's proxy will handle it in development, 
+    // and it will be a same-origin request in production.
+    this.baseURL = baseURL || '/api';
+  }
+
+  getBaseUrl(includeApiSegment = true) {
+    if (includeApiSegment) return this.baseURL;
+    return this.baseURL.endsWith('/api') ? this.baseURL.slice(0, -4) : this.baseURL;
   }
 
   // Generic API call method
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const defaultOptions = {
+    const token = this.getToken();
+    
+    const config = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.getToken()}`
-      }
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
+      },
     };
-
-    const config = { ...defaultOptions, ...options };
     
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
+      const contentType = response.headers.get("content-type");
+
+      // Handle JSON responses
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        return createApiResponse(true, data, 'Success');
       }
       
-      return createApiResponse(true, data, 'Success');
+      // Handle non-JSON error responses
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+      
+      // Handle non-JSON success responses (e.g., file downloads)
+      return createApiResponse(true, response, 'Success');
     } catch (error) {
-      console.error(`API Error [${endpoint}]:`, error);
+      console.error(`API Error [${config.method || 'GET'} ${endpoint}]:`, error);
       return createApiResponse(false, null, 'Request failed', error.message);
     }
   }
 
   getToken() {
-    // Get token from auth store or localStorage
-    return localStorage.getItem('token') || '';
+    return useAuthStore.getState().token;
   }
-
   // ===== CUSTOMER OPERATIONS =====
   async getCustomers() {
     return this.makeRequest('/customers');
@@ -167,6 +177,12 @@ class UnifiedApiService {
     });
   }
 
+  async regenerateInvoicePDF(id) {
+    return this.makeRequest(`/invoices/${id}/pdf`, {
+      method: 'POST'
+    });
+  }
+
   // ===== SHIPMENT OPERATIONS =====
   async getShipments(filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();
@@ -180,6 +196,31 @@ class UnifiedApiService {
 
   async getShipmentInvoices(shipmentId) {
     return this.makeRequest(`/shipment-invoices/shipments/${shipmentId}/invoices`);
+  }
+
+  async generateShipmentInvoices(shipmentId) {
+    return this.makeRequest(`/shipment-invoices/shipments/${shipmentId}/generate-invoices`, {
+      method: 'POST'
+    });
+  }
+
+  async confirmShipment(shipmentId) {
+    return this.makeRequest(`/shipment-invoices/shipments/${shipmentId}/confirm`, {
+      method: 'PATCH'
+    });
+  }
+
+  async updateShipmentAirwayBill(shipmentId, airwayBillNumber) {
+    return this.makeRequest(`/shipments/${shipmentId}/airway-bill`, {
+      method: 'PATCH',
+      body: JSON.stringify({ airwayBillNumber })
+    });
+  }
+
+  async deleteShipment(shipmentId) {
+    return this.makeRequest(`/shipments/${shipmentId}`, {
+      method: 'DELETE'
+    });
   }
 
   // ===== CROSS-REFERENCE OPERATIONS =====
@@ -244,6 +285,3 @@ class UnifiedApiService {
 const apiService = new UnifiedApiService();
 
 export default apiService;
-
-
-

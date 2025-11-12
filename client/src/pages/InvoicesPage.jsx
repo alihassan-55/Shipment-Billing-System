@@ -38,7 +38,7 @@ const InvoicesPage = () => {
   const handleDownloadPDF = async (invoiceId) => {
     try {
       // Use the main invoice PDF endpoint
-      const response = await axios.post(`/invoices/${invoiceId}/generate-pdf`, {}, {
+      const response = await axios.post(`/api/invoices/${invoiceId}/generate-pdf`, {}, {
         responseType: 'blob',
         headers: {
           'Accept': 'application/pdf'
@@ -83,7 +83,7 @@ const InvoicesPage = () => {
       console.log('Updating status for invoice:', selectedInvoiceForStatus.id, 'to:', serverStatus);
       console.log('Request URL:', `/invoices/${selectedInvoiceForStatus.id}/status`);
       
-      await axios.patch(`/invoices/${selectedInvoiceForStatus.id}/status`, {
+      await axios.patch(`/api/invoices/${selectedInvoiceForStatus.id}/status`, {
         status: serverStatus
       });
 

@@ -434,6 +434,7 @@ export async function addShipmentEvent(req, res) {
 }
 
 export async function confirmShipment(req, res) {
+  console.log('confirmShipment called with id:', req.params.id);
   const { id } = req.params;
 
   try {

@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import apiService from '../services/unifiedApiService.js';
+import { useMemo } from 'react';
 import { createFinancialTransaction } from '../types/integration.js';
 
 // Shared financial data store
@@ -53,15 +54,15 @@ export const useFinancialStore = create(
       searchQuery: '',
 
       // Actions
-      setLoading: (entity, loading) => set((state) => ({
-        loading: { ...state.loading, [entity]: loading }
+      setLoading: (entity, isLoading) => set(state => ({
+        loading: { ...state.loading, [entity]: isLoading }
       })),
 
-      setError: (entity, error) => set((state) => ({
+      setError: (entity, error) => set(state => ({
         errors: { ...state.errors, [entity]: error }
       })),
 
-      setSelectedEntity: (entityType, entity) => set((state) => ({
+      setSelectedEntity: (entityType, entity) => set(() => ({
         [`selected${entityType}`]: entity
       })),
 
@@ -73,117 +74,112 @@ export const useFinancialStore = create(
 
       // Data fetching actions
       fetchCustomers: async () => {
-        set((state) => ({ loading: { ...state.loading, customers: true } }));
+        get().setLoading('customers', true);
         try {
           const response = await apiService.getCustomers();
           if (response.success) {
-            set({ customers: response.data, errors: { ...get().errors, customers: null } });
+            set({ customers: response.data });
+            get().setError('customers', null);
           } else {
-            set((state) => ({ errors: { ...state.errors, customers: response.error } }));
+            get().setError('customers', response.error);
           }
         } catch (error) {
-          set((state) => ({ errors: { ...state.errors, customers: error.message } }));
+          get().setError('customers', error.message);
         } finally {
-          set((state) => ({ loading: { ...state.loading, customers: false } }));
+          get().setLoading('customers', false);
         }
       },
 
       fetchPayments: async (filters = {}) => {
-        set((state) => ({ loading: { ...state.loading, payments: true } }));
+        get().setLoading('payments', true);
         try {
           const response = await apiService.getPayments(filters);
           if (response.success) {
-            set({ payments: response.data, errors: { ...get().errors, payments: null } });
+            set({ payments: response.data });
+            get().setError('payments', null);
           } else {
-            set((state) => ({ errors: { ...state.errors, payments: response.error } }));
+            get().setError('payments', response.error);
           }
         } catch (error) {
-          set((state) => ({ errors: { ...state.errors, payments: error.message } }));
+          get().setError('payments', error.message);
         } finally {
-          set((state) => ({ loading: { ...state.loading, payments: false } }));
+          get().setLoading('payments', false);
         }
       },
 
       fetchLedgerEntries: async (filters = {}) => {
-        set((state) => ({ loading: { ...state.loading, ledgerEntries: true } }));
+        get().setLoading('ledgerEntries', true);
         try {
           const response = await apiService.getLedgerEntries(filters);
           if (response.success) {
-            set({ ledgerEntries: response.data, errors: { ...get().errors, ledgerEntries: null } });
+            set({ ledgerEntries: response.data });
+            get().setError('ledgerEntries', null);
           } else {
-            set((state) => ({ errors: { ...state.errors, ledgerEntries: response.error } }));
+            get().setError('ledgerEntries', response.error);
           }
         } catch (error) {
-          set((state) => ({ errors: { ...state.errors, ledgerEntries: error.message } }));
+          get().setError('ledgerEntries', error.message);
         } finally {
-          set((state) => ({ loading: { ...state.loading, ledgerEntries: false } }));
+          get().setLoading('ledgerEntries', false);
         }
       },
 
       fetchInvoices: async (filters = {}) => {
-        set((state) => ({ loading: { ...state.loading, invoices: true } }));
+        get().setLoading('invoices', true);
         try {
           const response = await apiService.getInvoices(filters);
           if (response.success) {
-            set({ invoices: response.data, errors: { ...get().errors, invoices: null } }));
+            set({ invoices: response.data });
+            get().setError('invoices', null);
           } else {
-            set((state) => ({ errors: { ...state.errors, invoices: response.error } }));
+            get().setError('invoices', response.error);
           }
         } catch (error) {
-          set((state) => ({ errors: { ...state.errors, invoices: error.message } }));
+          get().setError('invoices', error.message);
         } finally {
-          set((state) => ({ loading: { ...state.loading, invoices: false } }));
+          get().setLoading('invoices', false);
         }
       },
 
       fetchShipments: async (filters = {}) => {
-        set((state) => ({ loading: { ...state.loading, shipments: true } }));
+        get().setLoading('shipments', true);
         try {
           const response = await apiService.getShipments(filters);
           if (response.success) {
-            set({ shipments: response.data, errors: { ...get().errors, shipments: null } }));
+            set({ shipments: response.data });
+            get().setError('shipments', null);
           } else {
-            set((state) => ({ errors: { ...state.errors, shipments: response.error } }));
+            get().setError('shipments', response.error);
           }
         } catch (error) {
-          set((state) => ({ errors: { ...state.errors, shipments: error.message } }));
+          get().setError('shipments', error.message);
         } finally {
-          set((state) => ({ loading: { ...state.loading, shipments: false } }));
+          get().setLoading('shipments', false);
         }
       },
 
       // Integrated operations
       recordPaymentWithLedger: async (paymentData) => {
-        try {
-          const response = await apiService.recordPaymentWithLedger(paymentData);
-          if (response.success) {
-            // Refresh related data
-            await get().fetchPayments();
-            await get().fetchLedgerEntries();
-            if (paymentData.customerId) {
-              await get().fetchInvoices({ customerId: paymentData.customerId });
-            }
-            return response;
+        const response = await apiService.recordPaymentWithLedger(paymentData);
+        if (response.success) {
+          // Refresh related data
+          await get().fetchPayments();
+          await get().fetchLedgerEntries();
+          if (paymentData.customerId) {
+            await get().fetchInvoices({ customerId: paymentData.customerId });
           }
-          return response;
-        } catch (error) {
-          return { success: false, error: error.message };
         }
+        return response;
       },
 
       updateInvoiceStatus: async (invoiceId, status) => {
-        try {
-          const response = await apiService.updateInvoiceStatus(invoiceId, status);
-          if (response.success) {
-            // Refresh invoices and ledger entries
-            await get().fetchInvoices();
-            await get().fetchLedgerEntries();
-            return response;
-          }
-          return response;
-        } catch (error) {
-          return { success: false, error: error.message };
+        const response = await apiService.updateInvoiceStatus(invoiceId, status);
+        if (response.success) {
+          // Refresh invoices and ledger entries
+          await get().fetchInvoices();
+          await get().fetchLedgerEntries();
         }
+        return response;
       },
 
       // Utility functions
@@ -223,7 +219,7 @@ export const useFinancialStore = create(
         selectedInvoice: null,
         selectedPayment: null,
         selectedShipment: null,
-        filters: {
+        filters: { // Reset filters to initial state
           dateRange: null,
           customerId: null,
           status: null,
@@ -249,46 +245,51 @@ export const useFinancialStore = create(
 export const useFinancialData = () => {
   const store = useFinancialStore();
   return {
-    ...store,
-    // Computed values
-    filteredPayments: store.payments.filter(payment => {
-      if (store.filters.customerId && payment.customerId !== store.filters.customerId) return false;
-      if (store.filters.status && payment.status !== store.filters.status) return false;
-      if (store.filters.paymentMethod && payment.paymentMethod !== store.filters.paymentMethod) return false;
-      if (store.searchQuery) {
-        const query = store.searchQuery.toLowerCase();
-        return payment.receiptNumber?.toLowerCase().includes(query) ||
-               payment.customerName?.toLowerCase().includes(query) ||
-               payment.invoiceNumber?.toLowerCase().includes(query);
-      }
-      return true;
-    }),
-    
-    filteredInvoices: store.invoices.filter(invoice => {
-      if (store.filters.customerId && invoice.customerId !== store.filters.customerId) return false;
-      if (store.filters.status && invoice.status !== store.filters.status) return false;
-      if (store.searchQuery) {
-        const query = store.searchQuery.toLowerCase();
-        return invoice.invoiceNumber?.toLowerCase().includes(query) ||
-               invoice.customerName?.toLowerCase().includes(query);
-      }
-      return true;
-    }),
+    ...store, // Expose all store properties and actions
 
-    filteredLedgerEntries: store.ledgerEntries.filter(entry => {
-      if (store.filters.customerId && entry.customerId !== store.filters.customerId) return false;
-      if (store.searchQuery) {
-        const query = store.searchQuery.toLowerCase();
-        return entry.reference?.toLowerCase().includes(query) ||
-               entry.description?.toLowerCase().includes(query) ||
-               entry.customerName?.toLowerCase().includes(query);
-      }
-      return true;
-    })
+    // Memoized computed values for performance
+    filteredPayments: useMemo(() =>
+      store.payments.filter(payment => {
+        if (store.filters.customerId && payment.customerId !== store.filters.customerId) return false;
+        if (store.filters.status && payment.status !== store.filters.status) return false;
+        if (store.filters.paymentMethod && payment.paymentMethod !== store.filters.paymentMethod) return false;
+        if (store.searchQuery) {
+          const query = store.searchQuery.toLowerCase();
+          return payment.receiptNumber?.toLowerCase().includes(query) ||
+                 payment.customerName?.toLowerCase().includes(query) ||
+                 payment.invoiceNumber?.toLowerCase().includes(query);
+        }
+        return true;
+      }),
+      [store.payments, store.filters, store.searchQuery]
+    ),
+
+    filteredInvoices: useMemo(() =>
+      store.invoices.filter(invoice => {
+        if (store.filters.customerId && invoice.customerId !== store.filters.customerId) return false;
+        if (store.filters.status && invoice.status !== store.filters.status) return false;
+        if (store.searchQuery) {
+          const query = store.searchQuery.toLowerCase();
+          return invoice.invoiceNumber?.toLowerCase().includes(query) ||
+                 invoice.customerName?.toLowerCase().includes(query);
+        }
+        return true;
+      }),
+      [store.invoices, store.filters, store.searchQuery]
+    ),
+
+    filteredLedgerEntries: useMemo(() =>
+      store.ledgerEntries.filter(entry => {
+        if (store.filters.customerId && entry.customerId !== store.filters.customerId) return false;
+        if (store.searchQuery) {
+          const query = store.searchQuery.toLowerCase();
+          return entry.reference?.toLowerCase().includes(query) ||
+                 entry.description?.toLowerCase().includes(query) ||
+                 entry.customerName?.toLowerCase().includes(query);
+        }
+        return true;
+      }),
+      [store.ledgerEntries, store.filters.customerId, store.searchQuery]
+    ),
   };
 };
-
-
-
-
-

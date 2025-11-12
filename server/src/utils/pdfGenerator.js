@@ -85,8 +85,8 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
       console.log('Generating Declared Value Invoice PDF for:', invoice.id);
 
       const shipment = invoice.shipments;
-      const shipper = shipment.Customer;
-      const consignee = shipment.consignees;
+      const shipper = shipment?.Customer;
+      const consignee = shipment?.consignees;
 
       // Colors
       const darkGray = '#2C2C2C';
@@ -118,7 +118,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
 
       doc.fontSize(12)
          .font('Helvetica')
-         .text(`Date: ${new Date(invoice.issuedAt).toLocaleDateString()}`, doc.page.width - 200, 160);
+         .text(`Date: ${invoice.issuedAt ? new Date(invoice.issuedAt).toLocaleDateString() : new Date().toLocaleDateString()}`, doc.page.width - 200, 160);
 
       // Line under date
       doc.rect(doc.page.width - 200, 175, 150, 1).fill('black');
@@ -130,9 +130,9 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
 
       doc.fontSize(12)
          .font('Helvetica')
-         .text(`Receiver Name: ${consignee.personName}`, 50, 230)
-         .text(`Address (Country): ${consignee.address}, ${consignee.city}, ${consignee.country}`, 50, 250)
-         .text(`Phone Number: ${consignee.phone}`, 50, 270);
+         .text(`Receiver Name: ${consignee?.personName || 'N/A'}`, 50, 230)
+         .text(`Address (Country): ${consignee ? `${consignee.address}, ${consignee.city}, ${consignee.country}` : 'N/A'}`, 50, 250)
+         .text(`Phone Number: ${consignee?.phone || 'N/A'}`, 50, 270);
 
       // Declared Value section
       doc.fontSize(16)
@@ -195,7 +195,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
 
       doc.fontSize(12)
          .font('Helvetica')
-         .text(`Service: ${shipment.service_providers.name}`, 50, currentY + 70);
+         .text(`Service: ${shipment?.service_providers?.name || 'N/A'}`, 50, currentY + 70);
 
       // Shipper section
       doc.fontSize(16)
@@ -204,9 +204,9 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
 
       doc.fontSize(12)
          .font('Helvetica')
-         .text(`${shipper.personName}`, 50, currentY + 130)
-         .text(`ID Card Number: ${shipper.cnic || '[]'}`, 50, currentY + 150)
-         .text(`NTN: ${shipper.ntn || '[]'}`, 50, currentY + 170);
+         .text(`${shipper?.personName || 'N/A'}`, 50, currentY + 130)
+         .text(`ID Card Number: ${shipper?.cnic || '[]'}`, 50, currentY + 150)
+         .text(`NTN: ${shipper?.ntn || '[]'}`, 50, currentY + 170);
 
       // Shipping Policy
       doc.fontSize(16)
@@ -272,7 +272,7 @@ function generateBillingInvoicePDF(doc, invoice) {
 
       doc.fontSize(12)
          .font('Helvetica')
-         .text(`Date: ${new Date(invoice.issuedAt).toLocaleDateString()}`, doc.page.width - 200, 160);
+         .text(`Date: ${invoice.issuedAt ? new Date(invoice.issuedAt).toLocaleDateString() : new Date().toLocaleDateString()}`, doc.page.width - 200, 160);
 
       // Line under date
       doc.rect(doc.page.width - 200, 175, 150, 1).fill('black');
@@ -284,9 +284,9 @@ function generateBillingInvoicePDF(doc, invoice) {
 
       doc.fontSize(12)
          .font('Helvetica')
-         .text(`Receiver Name: ${consignee.personName}`, 50, 230)
-         .text(`Address (Country): ${consignee.address}, ${consignee.city}, ${consignee.country}`, 50, 250)
-         .text(`Phone Number: ${consignee.phone}`, 50, 270);
+         .text(`Receiver Name: ${consignee?.personName || 'N/A'}`, 50, 230)
+         .text(`Address (Country): ${consignee ? `${consignee.address}, ${consignee.city}, ${consignee.country}` : 'N/A'}`, 50, 250)
+         .text(`Phone Number: ${consignee?.phone || 'N/A'}`, 50, 270);
 
       // Billing details section
       doc.fontSize(16)

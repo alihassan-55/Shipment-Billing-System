@@ -5,14 +5,13 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { FileText, Download, RefreshCw, Eye } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import apiService from '../services/unifiedApiService';
 
 const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const { token } = useAuthStore();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-
-  const API_BASE_URL = import.meta.env.VITE_API_TARGET ?? 'http://localhost:3001';
 
   // Load invoices when component mounts or shipmentId changes
   useEffect(() => {
@@ -32,18 +31,13 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     setLoading(true);
     console.log('Loading invoices for shipment:', shipmentId, 'status:', shipmentStatus);
     try {
-       const response = await fetch(`${API_BASE_URL}/api/shipment-invoices/shipments/${shipmentId}/invoices`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiService.getShipmentInvoices(shipmentId);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Invoices loaded:', data.invoices);
-        setInvoices(data.invoices || []);
+      if (response.success) {
+        console.log('Invoices loaded:', response.data.invoices);
+        setInvoices(response.data.invoices || []);
       } else {
-        console.error('Failed to load invoices:', response.status);
+        console.error('Failed to load invoices:', response.error);
       }
     } catch (error) {
       console.error('Error loading invoices:', error);
@@ -55,20 +49,12 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const generateInvoices = async () => {
     setGenerating(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/shipment-invoices/shipments/${shipmentId}/generate-invoices`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiService.generateShipmentInvoices(shipmentId);
       
-      if (response.ok) {
-        const data = await response.json();
-        setInvoices(data.invoices ? Object.values(data.invoices) : []);
+      if (response.success) {
+        setInvoices(response.data.invoices ? Object.values(response.data.invoices) : []);
       } else {
-        const errorData = await response.json();
-        alert('Failed to generate invoices: ' + (errorData.error || 'Unknown error'));
+        alert('Failed to generate invoices: ' + (response.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error generating invoices:', error);
@@ -80,19 +66,13 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
 
   const regeneratePDF = async (invoiceId) => {
     try {
-      const response = await fetch(`http://${API_BASE_URL}/api/invoices/${invoiceId}/pdf`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiService.regenerateInvoicePDF(invoiceId);
       
-      if (response.ok) {
+      if (response.success) {
         alert('PDF regenerated successfully');
         loadInvoices(); // Reload to get updated PDF URL
       } else {
-        const errorData = await response.json();
-        alert('Failed to regenerate PDF: ' + (errorData.error || 'Unknown error'));
+        alert('Failed to regenerate PDF: ' + (response.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error regenerating PDF:', error);
@@ -103,7 +83,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const downloadPDF = (pdfUrl) => {
     if (pdfUrl) {
       // Construct full URL with server address
-      const fullUrl = pdfUrl.startsWith('http') ? pdfUrl : `http://${API_BASE_URL}${pdfUrl}`;
+      const fullUrl = pdfUrl.startsWith('http') ? pdfUrl : `${apiService.getBaseUrl(false)}${pdfUrl}`;
       window.open(fullUrl, '_blank');
     } else {
       alert('PDF not available yet. Please regenerate PDF.');

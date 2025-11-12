@@ -35,21 +35,21 @@ export function createApp() {
   // Configure Helmet with a restrictive Content Security Policy.
   // We set default-src to 'self' and explicitly allow the deployment host for
   // fetch/connect requests so client-side API calls to the Fly app are not blocked.
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        // Allow XHR/fetch/websocket connections to self and the Fly deployment
-        connectSrc: ["'self'", 'https://shipment-billing-system.fly.dev'],
-        // Keep script/style/img defaults conservative but allow self
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:'],
-        objectSrc: ["'none'"],
-        frameAncestors: ["'none'"]
-      }
-    }
-  }));
+  // app.use(helmet({
+  //   contentSecurityPolicy: {
+  //     directives: {
+  //       defaultSrc: ["'self'"],
+  //       // Allow XHR/fetch/websocket connections to self and the Fly deployment
+  //       connectSrc: ["'self'", 'https://shipment-billing-system.fly.dev'],
+  //       // Keep script/style/img defaults conservative but allow self
+  //       scriptSrc: ["'self'"],
+  //       styleSrc: ["'self'"],
+  //       imgSrc: ["'self'", 'data:'],
+  //       objectSrc: ["'none'"],
+  //       frameAncestors: ["'none'"]
+  //     }
+  //   }
+  // }));
   
   // Configure CORS based on environment
   const isProduction = process.env.NODE_ENV === 'production';
@@ -131,7 +131,7 @@ export function createApp() {
   app.use('/api/consignees', consigneeRoutes);
   app.use('/api/service-providers', serviceProviderRoutes);
   app.use('/api/shipment-invoices', shipmentInvoiceRoutes);
-  app.use('/api/integration', integrationRoutes);
+  // app.use('/api/integration', integrationRoutes);
 
   // Serve client app for all non-API routes if client files exist
   if (clientFilesExist) {
