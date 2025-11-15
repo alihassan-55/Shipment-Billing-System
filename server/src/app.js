@@ -32,25 +32,19 @@ import { requireAuth } from './middleware/auth.js';
 export function createApp() {
   const app = express();
 
-  // Configure Helmet with a restrictive Content Security Policy.
-  // We set default-src to 'self' and explicitly allow the deployment host for
-  // fetch/connect requests so client-side API calls to the Fly app are not blocked.
-  // app.use(helmet({
-  //   contentSecurityPolicy: {
-  //     directives: {
-  //       defaultSrc: ["'self'"],
-  //       // Allow XHR/fetch/websocket connections to self and the Fly deployment
-  //       connectSrc: ["'self'", 'https://shipment-billing-system.fly.dev'],
-  //       // Keep script/style/img defaults conservative but allow self
-  //       scriptSrc: ["'self'"],
-  //       styleSrc: ["'self'"],
-  //       imgSrc: ["'self'", 'data:'],
-  //       objectSrc: ["'none'"],
-  //       frameAncestors: ["'none'"]
-  //     }
-  //   }
-  // }));
-  
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: ["'self'", process.env.CLIENT_URL || 'https://shipment-billing-system.onrender.com'],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"]
+      }
+    }
+  }));
   // Configure CORS based on environment
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) {
@@ -63,7 +57,7 @@ export function createApp() {
     // In development, allow all origins for flexibility
     app.use(cors({ origin: true, credentials: true }));
   }
-  
+
   app.use(express.json());
   app.use(morgan('dev'));
 
@@ -72,7 +66,7 @@ export function createApp() {
   const invoicesDir = path.join(uploadsDir, 'invoices');
   fs.mkdirSync(uploadsDir, { recursive: true });
   fs.mkdirSync(invoicesDir, { recursive: true });
-  
+
   // Serve static files (PDFs) with CORS headers
   app.use('/uploads', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -92,12 +86,12 @@ export function createApp() {
   const clientBuildPath = path.join(__dirname, '../../client/dist');
   const indexPath = path.join(clientBuildPath, 'index.html');
   const clientFilesExist = fs.existsSync(indexPath);
-  
+
   if (clientFilesExist) {
     console.log('Serving client from:', clientBuildPath);
     console.log('Client build path exists:', fs.existsSync(clientBuildPath));
     console.log('Index.html exists:', fs.existsSync(indexPath));
-    
+
     // Serve static files from client dist
     app.use(express.static(clientBuildPath, {
       maxAge: isProduction ? '1y' : '0',
@@ -110,8 +104,8 @@ export function createApp() {
 
   app.get('/api/health', async (_req, res) => {
     const dbConnected = await checkDatabaseConnection();
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       env: process.env.NODE_ENV || 'development',
       database: dbConnected ? 'connected' : 'disconnected',
       timestamp: new Date().toISOString()
@@ -136,14 +130,14 @@ export function createApp() {
   // Serve client app for all non-API routes if client files exist
   if (clientFilesExist) {
     console.log('Setting up catch-all route to serve index.html from:', indexPath);
-    
+
     // Catch-all handler for client-side routing (must be last, handles all HTTP methods)
     app.use('*', (req, res, next) => {
       // Don't handle API routes here
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Not Found', path: req.path });
       }
-      
+
       // Serve index.html for client-side routing
       res.sendFile(indexPath, (err) => {
         if (err) {
@@ -158,11 +152,11 @@ export function createApp() {
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Not Found', path: req.path });
       }
-      res.status(404).json({ 
-        error: 'Not Found', 
+      res.status(404).json({
+        error: 'Not Found',
         path: req.path,
-        message: isProduction 
-          ? 'Client application not built. Please build the client first.' 
+        message: isProduction
+          ? 'Client application not built. Please build the client first.'
           : 'Client application not found. Run "npm run build" in the client directory or start the client dev server separately.'
       });
     });
