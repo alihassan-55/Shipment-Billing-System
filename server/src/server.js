@@ -1,6 +1,5 @@
 // Load environment variables FIRST before importing app
 import 'dotenv/config'
-dotenv.config();
 
 import app from './app.js';
 import os from 'os';
