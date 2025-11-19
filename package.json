@@ -22,8 +22,8 @@
     "billing",
     "express",
     "react"
-  ]
+  ],
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
 }
-
-
-
