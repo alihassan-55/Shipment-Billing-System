@@ -5,7 +5,7 @@
   "description": "Courier Billing System - Integrated Server and Client",
   "scripts": {
     "install:all": "cd client && npm install && cd ../server && npm install",
-    "build": "cd client && npm install && npm run build",
+    "build": "cd client && npm install && npm run build && cd ../server && npm install",
     "start": "cd server && npm start",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
@@ -22,8 +22,8 @@
     "billing",
     "express",
     "react"
-  ]
+  ],
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
 }
-
-
-

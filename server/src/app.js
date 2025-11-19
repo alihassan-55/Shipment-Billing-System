@@ -1,4 +1,3 @@
-import 'dotenv/config'
 // Load environment variables FIRST before any other imports
 
 import express from 'express';
