@@ -33,7 +33,14 @@ prisma.$on('error', (e) => {
 // Add connection health check
 export async function checkDatabaseConnection() {
   try {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const directUrl = process.env.DIRECT_URL || '';
+    console.log('Checking database connection...');
+    console.log('DATABASE_URL:', dbUrl.replace(/:[^:@]*@/, ':****@'));
+    console.log('DIRECT_URL:', directUrl.replace(/:[^:@]*@/, ':****@'));
+
     await prisma.$queryRaw`SELECT 1`;
+    console.log('Database connection successful!');
     return true;
   } catch (error) {
     console.error('Database connection failed:', error);
