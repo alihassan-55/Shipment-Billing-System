@@ -6,8 +6,7 @@ const globalForPrisma = globalThis;
 if (!process.env.DATABASE_URL) {
   throw new Error(
     'DATABASE_URL environment variable is not set. ' +
-    'Please set it in your environment variables or .env file. ' +
-    'For Fly.io deployment, set it using: flyctl secrets set DATABASE_URL=your_connection_string'
+    'Please set it in your environment variables or .env file.'
   );
 }
 
@@ -33,7 +32,14 @@ prisma.$on('error', (e) => {
 // Add connection health check
 export async function checkDatabaseConnection() {
   try {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const directUrl = process.env.DIRECT_URL || '';
+    console.log('Checking database connection...');
+    console.log('DATABASE_URL:', dbUrl.replace(/:[^:@]*@/, ':****@'));
+    console.log('DIRECT_URL:', directUrl.replace(/:[^:@]*@/, ':****@'));
+
     await prisma.$queryRaw`SELECT 1`;
+    console.log('Database connection successful!');
     return true;
   } catch (error) {
     console.error('Database connection failed:', error);

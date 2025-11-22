@@ -6,6 +6,8 @@ import { prisma } from '../db/client.js';
 import { generateInvoicePDF } from '../utils/pdfGenerator.js';
 import crypto from 'crypto';
 import { IntegrationService } from '../services/integrationService.js';
+import { s3Client } from '../config/supabase.js';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 export async function createInvoice(req, res) {
   const { shipmentIds, customerId, issuedDate, dueDate, taxRate = 0.18 } = req.body;
@@ -47,7 +49,7 @@ export async function createInvoice(req, res) {
         const insurance = shipment.declaredValue ? shipment.declaredValue * 0.01 : 0;
         const codFee = shipment.codAmount ? shipment.codAmount * 0.02 : 0;
         const lineTotal = shipmentCharge + insurance + codFee;
-        
+
         subtotal += lineTotal;
 
         return {
@@ -209,7 +211,7 @@ export async function generateInvoicePDFEndpoint(req, res) {
 
   try {
     console.log(`Generating PDF for invoice: ${id}`);
-    
+
     const invoice = await prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -233,38 +235,46 @@ export async function generateInvoicePDFEndpoint(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
 
     try {
-      // Generate PDF with invoice data
+      // Generate PDF with invoice data (Uploads to Supabase)
       const pdfPath = await generateInvoicePDF(id, 'MAIN', invoice);
-      console.log(`PDF generated at: ${pdfPath}`);
-      
-      // Get the absolute path
-      const { fileURLToPath } = await import('url');
-      const { dirname } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const absolutePdfPath = path.join(__dirname, '../..', pdfPath);
-      
+      console.log(`PDF generated at (path in bucket): ${pdfPath}`);
+
       // Update invoice with PDF path
       await prisma.invoice.update({
         where: { id },
         data: { pdfPath },
       });
 
+      // Download from Supabase via S3 Protocol
+      const command = new GetObjectCommand({
+        Bucket: 'invoices',
+        Key: pdfPath,
+      });
+
+      const s3Items = await s3Client.send(command);
+
+      if (!s3Items.Body) {
+        throw new Error('PDF file not found in storage (Empty Body)');
+      }
+
+      // Convert Stream to Buffer for sending
+      const chunks = [];
+      for (const chunk of await s3Items.Body.transformToByteArray()) {
+        chunks.push(chunk);
+      }
+      const pdfBuffer = Buffer.from(chunks);
+      console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
+
       // Set PDF response headers
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`);
-      
-      // Read and send PDF
-      const fs = await import('fs/promises');
-      const pdfBuffer = await fs.readFile(absolutePdfPath);
-      console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
-      
+
       return res.status(200).send(pdfBuffer);
     } catch (pdfError) {
       console.error('Error generating or sending PDF:', pdfError);
-      return res.status(500).json({ 
-        error: 'Failed to generate PDF', 
-        details: pdfError.message 
+      return res.status(500).json({
+        error: 'Failed to generate PDF',
+        details: pdfError.message
       });
     }
   } catch (error) {
@@ -289,8 +299,8 @@ export async function updateInvoiceStatus(req, res) {
   const validStatuses = ['DRAFT', 'UNPAID', 'PARTIAL', 'PAID', 'ADD_TO_LEDGER'];
   if (!validStatuses.includes(status)) {
     console.log('Invalid status:', status);
-    return res.status(400).json({ 
-      error: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
+    return res.status(400).json({
+      error: 'Invalid status. Must be one of: ' + validStatuses.join(', ')
     });
   }
 
@@ -307,8 +317,8 @@ export async function updateInvoiceStatus(req, res) {
     if (error.message === 'Invoice not found') {
       return res.status(404).json({ error: 'Invoice not found' });
     }
-    return res.status(500).json({ 
-      error: 'Failed to update invoice status: ' + error.message 
+    return res.status(500).json({
+      error: 'Failed to update invoice status: ' + error.message
     });
   }
 }
@@ -362,7 +372,7 @@ export async function createInvoiceFromShipments(req, res) {
       if (!invoice) {
         // Create new invoice
         const invoiceNumber = await generateInvoiceNumber();
-        
+
         invoice = await tx.invoice.create({
           data: {
             id: crypto.randomUUID(),
@@ -388,7 +398,7 @@ export async function createInvoiceFromShipments(req, res) {
       let totalAmount = 0;
       for (const shipment of shipments) {
         const shipmentAmount = shipment.billing_invoices?.grandTotal || 0;
-        
+
         // Create line item for shipment
         await tx.invoiceLineItem.create({
           data: {
@@ -471,7 +481,7 @@ async function generateInvoiceNumber() {
       }
     }
   });
-  
+
   const nextNumber = (count + 1).toString().padStart(6, '0');
   return `INV-${year}-${nextNumber}`;
 }

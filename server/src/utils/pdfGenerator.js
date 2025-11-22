@@ -1,82 +1,75 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import PDFDocument from 'pdfkit';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { s3Client } from '../config/supabase.js';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 // Enhanced PDF generation for shipment invoices
 
 export async function generateInvoicePDF(invoiceId, type = null, invoiceData = null) {
-  // Create uploads directory if it doesn't exist
-  const uploadsDir = path.join(__dirname, '../../uploads/invoices');
-  await fs.promises.mkdir(uploadsDir, { recursive: true });
+   return new Promise((resolve, reject) => {
+      try {
+         // Create PDF document
+         const doc = new PDFDocument({
+            size: 'A4',
+            margin: 50,
+            info: {
+               Title: `Shipment Receipt - ${type}`,
+               Author: 'Courier Billing System',
+               Subject: 'Shipment Invoice'
+            }
+         });
 
-  // Generate PDF file path
-  const pdfPath = path.join(uploadsDir, `invoice-${invoiceId}.pdf`);
-  
-  // Clean up old file if it exists
-  try {
-    await fs.promises.unlink(pdfPath);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      console.error('Error cleaning up old PDF:', err);
-    }
-  }
+         // Buffer to store PDF data
+         const buffers = [];
+         doc.on('data', buffers.push.bind(buffers));
 
-  return new Promise((resolve, reject) => {
-    try {
-      // Create PDF document
-      const doc = new PDFDocument({
-        size: 'A4',
-        margin: 50,
-        info: {
-          Title: `Shipment Receipt - ${type}`,
-          Author: 'Courier Billing System',
-          Subject: 'Shipment Invoice'
-        }
-      });
+         doc.on('end', async () => {
+            try {
+               const pdfData = Buffer.concat(buffers);
+               const fileName = `invoice-${invoiceId}.pdf`;
 
-      // Create write stream for PDF file
-      const writeStream = fs.createWriteStream(pdfPath);
+               // Upload to Supabase Storage via S3 Protocol
+               const command = new PutObjectCommand({
+                  Bucket: 'invoices',
+                  Key: fileName,
+                  Body: pdfData,
+                  ContentType: 'application/pdf',
+                  // Upsert is implicit in S3
+               });
 
-      // Handle stream events
-      writeStream.on('error', (error) => {
-        console.error('PDF write stream error:', error);
-        reject(error);
-      });
+               const response = await s3Client.send(command);
+               console.log(`PDF generated and uploaded successfully via S3: ${fileName}`, response);
 
-      writeStream.on('finish', () => {
-        console.log(`PDF generated successfully at: ${pdfPath}`);
-        // Return the path relative to uploads directory for serving via static middleware
-        resolve(`/uploads/invoices/invoice-${invoiceId}.pdf`);
-      });
+               // Return the path (Key)
+               resolve(fileName);
+            } catch (err) {
+               console.error('Error uploading PDF to Supabase (S3):', err);
+               reject(err);
+            }
+         });
 
-      // Pipe PDF to file
-      doc.pipe(writeStream);
+         doc.on('error', (error) => {
+            console.error('PDF document error:', error);
+            reject(error);
+         });
 
-      // Generate PDF content based on invoice type
-      if (type === 'DECLARED_VALUE') {
-        generateDeclaredValueInvoicePDF(doc, invoiceData);
-      } else if (type === 'BILLING') {
-        generateBillingInvoicePDF(doc, invoiceData);
-      } else if (type === 'MAIN') {
-        generateMainInvoicePDF(doc, invoiceData);
-      } else {
-        generateGenericInvoicePDF(doc, invoiceId);
+         // Generate PDF content based on invoice type
+         if (type === 'DECLARED_VALUE') {
+            generateDeclaredValueInvoicePDF(doc, invoiceData);
+         } else if (type === 'BILLING') {
+            generateBillingInvoicePDF(doc, invoiceData);
+         } else if (type === 'MAIN') {
+            generateMainInvoicePDF(doc, invoiceData);
+         } else {
+            generateGenericInvoicePDF(doc, invoiceId);
+         }
+
+         // Finalize PDF - this triggers the 'end' event
+         doc.end();
+      } catch (error) {
+         console.error('Error in PDF generation:', error);
+         reject(error);
       }
-
-      // Finalize PDF - this triggers the 'finish' event
-      doc.end();
-    } catch (error) {
-      console.error('Error in PDF generation:', error);
-      if (writeStream) {
-        writeStream.end();
-      }
-      reject(error);
-    }
-  });
+   });
 }
 
 // Generate Declared Value Invoice PDF
