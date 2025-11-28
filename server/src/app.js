@@ -34,7 +34,7 @@ export function createApp() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        connectSrc: ["'self'", process.env.CLIENT_URL || 'https://shipment-billing-system.onrender.com'],
+        connectSrc: ["'self'", process.env.CLIENT_URL],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
         imgSrc: ["'self'", 'data:'],
