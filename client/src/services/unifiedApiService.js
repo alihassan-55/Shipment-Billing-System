@@ -20,7 +20,7 @@ class UnifiedApiService {
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const token = this.getToken();
-    
+
     const config = {
       ...options,
       headers: {
@@ -29,7 +29,7 @@ class UnifiedApiService {
         ...options.headers,
       },
     };
-    
+
     try {
       const response = await fetch(url, config);
       const contentType = response.headers.get("content-type");
@@ -42,13 +42,13 @@ class UnifiedApiService {
         }
         return createApiResponse(true, data, 'Success');
       }
-      
+
       // Handle non-JSON error responses
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
       }
-      
+
       // Handle non-JSON success responses (e.g., file downloads)
       return createApiResponse(true, response, 'Success');
     } catch (error) {
@@ -74,8 +74,8 @@ class UnifiedApiService {
   }
 
   async getCustomerInvoices(customerId, status = null) {
-    const endpoint = status ? 
-      `/customers/${customerId}/invoices?status=${status}` : 
+    const endpoint = status ?
+      `/customers/${customerId}/invoices?status=${status}` :
       `/customers/${customerId}/invoices`;
     return this.makeRequest(endpoint);
   }
@@ -131,8 +131,8 @@ class UnifiedApiService {
 
   async getCustomerLedgerEntries(customerId, filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();
-    const endpoint = queryParams ? 
-      `/customers/${customerId}/ledger-entries?${queryParams}` : 
+    const endpoint = queryParams ?
+      `/customers/${customerId}/ledger-entries?${queryParams}` :
       `/customers/${customerId}/ledger-entries`;
     return this.makeRequest(endpoint);
   }
@@ -278,6 +278,25 @@ class UnifiedApiService {
   async exportFinancialData(entityType, filters = {}, format = 'csv') {
     const queryParams = new URLSearchParams({ ...filters, format }).toString();
     return this.makeRequest(`/export/${entityType}?${queryParams}`);
+  }
+
+  // ===== BLOB OPERATIONS =====
+  async fetchBlob(url) {
+    const token = this.getToken();
+    const config = {
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      }
+    };
+
+    // Handle full URL or relative path
+    const fullUrl = url.startsWith('http') ? url : url;
+
+    const response = await fetch(fullUrl, config);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+    return await response.blob();
   }
 }
 

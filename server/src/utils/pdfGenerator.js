@@ -27,6 +27,9 @@ export async function generateInvoicePDF(invoiceId, type = null, invoiceData = n
                const pdfData = Buffer.concat(buffers);
                const fileName = `invoice-${invoiceId}.pdf`;
 
+               const pdflen = pdfData.length;
+               console.log(`PDF Buffer created. Size: ${pdflen} bytes. Starting S3 upload...`);
+
                // Upload to Supabase Storage via S3 Protocol
                const command = new PutObjectCommand({
                   Bucket: 'invoices',
