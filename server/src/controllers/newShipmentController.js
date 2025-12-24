@@ -23,7 +23,7 @@ function generateReferenceNumber() {
 export async function createShipment(req, res) {
   console.log('Received shipment data:', JSON.stringify(req.body, null, 2));
   console.log('User from token:', req.user);
-  
+
   const {
     referenceNumber,
     serviceProviderId,
@@ -39,8 +39,8 @@ export async function createShipment(req, res) {
 
   // Validation
   if (!serviceProviderId || !customerId || !consigneeId || !terms || !boxes || !actualWeightKg) {
-    return res.status(400).json({ 
-      error: 'Missing required fields: serviceProviderId, customerId, consigneeId, terms, boxes, actualWeightKg' 
+    return res.status(400).json({
+      error: 'Missing required fields: serviceProviderId, customerId, consigneeId, terms, boxes, actualWeightKg'
     });
   }
 
@@ -118,7 +118,7 @@ export async function createShipment(req, res) {
       console.error('Error details:', error.message);
       console.error('Error code:', error.code);
       console.error('Error meta:', error.meta);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to create shipment: ' + error.message,
         details: error.message,
         code: error.code
@@ -245,19 +245,19 @@ export async function updateShipment(req, res) {
     }
 
     // Filter out non-updatable or non-schema fields
-    const { 
-      id: _, 
-      createdAt, 
-      createdById, 
-      serviceProviderId, 
-      customerId, 
+    const {
+      id: _,
+      createdAt,
+      createdById,
+      serviceProviderId,
+      customerId,
       consigneeId,
       hasVatNumber, // not in schema
       vatNumber,    // not in schema
       boxes,        // handled at creation only
       productInvoice, // handled via services
       billingInvoice,  // handled below
-      ...filteredUpdates 
+      ...filteredUpdates
     } = updateData;
     // Whitelist scalar fields that exist on `shipments` for update
     const allowedScalarFields = [
@@ -290,7 +290,7 @@ export async function updateShipment(req, res) {
     // Handle billing invoice updates
     if (updateData.billingInvoice) {
       const billingData = updateData.billingInvoice;
-      
+
       if (existingShipment.billing_invoices) {
         // Update existing billing invoice
         await prisma.billing_invoices.update({
@@ -381,7 +381,7 @@ export async function updateAirwayBill(req, res) {
   try {
     const shipment = await prisma.shipments.update({
       where: { id },
-      data: { 
+      data: {
         airwayBillNumber,
         updatedAt: new Date()
       },
@@ -448,6 +448,17 @@ export async function confirmShipment(req, res) {
 
     // Now generate invoices
     const result = await IntegrationService.confirmShipmentWithInvoices(id, req.user.sub);
+
+    // Transform PDF URLs for client
+    if (result.invoices) {
+      if (result.invoices.declaredValueInvoice && result.invoices.declaredValueInvoice.pdfUrl) {
+        result.invoices.declaredValueInvoice.pdfUrl = `/api/shipment-invoices/invoices/${result.invoices.declaredValueInvoice.id}/pdf`;
+      }
+      if (result.invoices.billingInvoice && result.invoices.billingInvoice.pdfUrl) {
+        result.invoices.billingInvoice.pdfUrl = `/api/shipment-invoices/invoices/${result.invoices.billingInvoice.id}/pdf`;
+      }
+    }
+
     return res.json(result);
   } catch (error) {
     console.error('Shipment confirmation error:', error);
@@ -477,7 +488,7 @@ export async function deleteShipment(req, res) {
             where: { id: invoice.postedLedgerEntryId }
           });
         }
-        
+
         // Delete ledger entries linked to this invoice
         await tx.ledgerEntry.deleteMany({
           where: { referenceId: invoice.id }

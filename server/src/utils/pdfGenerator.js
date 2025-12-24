@@ -3,6 +3,29 @@ import { s3Client } from '../config/supabase.js';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 // Enhanced PDF generation for shipment invoices
+// Design: Modern Green & White Theme
+
+const COLORS = {
+   primary: '#2E7D32', // Forest Green
+   secondary: '#4CAF50', // Standard Green
+   accent: '#A5D6A7', // Light Green
+   dark: '#1B5E20', // Dark Green
+   text: '#333333',
+   lightText: '#666666',
+   white: '#FFFFFF',
+   tableHeader: '#2E7D32',
+   tableRowEven: '#F1F8E9', // Very light green
+   border: '#E0E0E0'
+};
+
+const COMPANY_INFO = {
+   name: 'Courier Billing System',
+   address: '123 Logistics Avenue, Business District',
+   city: 'Commerce City, 54000',
+   email: 'billing@courier-system.com',
+   phone: '+92 300 1234567',
+   website: 'www.courier-system.com'
+};
 
 export async function generateInvoicePDF(invoiceId, type = null, invoiceData = null) {
    return new Promise((resolve, reject) => {
@@ -10,10 +33,10 @@ export async function generateInvoicePDF(invoiceId, type = null, invoiceData = n
          // Create PDF document
          const doc = new PDFDocument({
             size: 'A4',
-            margin: 50,
+            margin: 0, // We handle margins manually for full-bleed headers
             info: {
-               Title: `Shipment Receipt - ${type}`,
-               Author: 'Courier Billing System',
+               Title: `Shipment Invoice - ${type}`,
+               Author: COMPANY_INFO.name,
                Subject: 'Shipment Invoice'
             }
          });
@@ -27,13 +50,15 @@ export async function generateInvoicePDF(invoiceId, type = null, invoiceData = n
                const pdfData = Buffer.concat(buffers);
                const fileName = `invoice-${invoiceId}.pdf`;
 
+               const pdflen = pdfData.length;
+               console.log(`PDF Buffer created. Size: ${pdflen} bytes. Starting S3 upload...`);
+
                // Upload to Supabase Storage via S3 Protocol
                const command = new PutObjectCommand({
                   Bucket: 'invoices',
                   Key: fileName,
                   Body: pdfData,
                   ContentType: 'application/pdf',
-                  // Upsert is implicit in S3
                });
 
                const response = await s3Client.send(command);
@@ -72,488 +97,361 @@ export async function generateInvoicePDF(invoiceId, type = null, invoiceData = n
    });
 }
 
-// Generate Declared Value Invoice PDF
+// --- Shared Helper Functions ---
+
+function cleanText(text) {
+   if (!text) return '';
+   // Replace numbers with more than 2 decimal places with 2 decimal places
+   return String(text).replace(/(\d+\.\d{3,})/g, (match) => Number(match).toFixed(2));
+}
+
+function drawHeader(doc, title, invoiceNumber, date) {
+   // Left Geometric shape (Green Triangle/Polygon)
+   doc.save();
+   doc.moveTo(0, 0)
+      .lineTo(250, 0)
+      .lineTo(180, 120)
+      .lineTo(0, 120)
+      .fill(COLORS.primary);
+
+   // Lighter accent shape
+   doc.moveTo(0, 0)
+      .lineTo(150, 0)
+      .lineTo(100, 120)
+      .lineTo(0, 120)
+      .fillOpacity(0.3)
+      .fill(COLORS.accent);
+   doc.restore();
+
+   // Company Info (White text on Green background)
+   // Logo placeholder
+   // doc.rect(30, 20, 40, 40).fill('white'); // Placeholder for logo if needed
+
+   doc.font('Helvetica-Bold').fontSize(18).fillColor(COLORS.white)
+      .text(COMPANY_INFO.name, 30, 30, { width: 200 }); // Constrain width
+
+   doc.font('Helvetica').fontSize(9).fillColor(COLORS.white)
+      .text(COMPANY_INFO.address, 30, 55, { width: 140 })
+      .text(COMPANY_INFO.city, 30, 80, { width: 140 }) // Adjusted Y
+      .text(COMPANY_INFO.email, 30, 95, { width: 140 });
+
+   // Right Side: Title and Invoice Details
+   // Reduced font size to prevent overlapping
+   doc.font('Helvetica-Bold').fontSize(22).fillColor(COLORS.primary)
+      .text(title.toUpperCase(), 300, 40, { align: 'right', width: 250 });
+
+   doc.rect(300, 70, 250, 2).fill(COLORS.secondary);
+
+   doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.text)
+      .text('INVOICE #', 350, 80, { align: 'right', width: 200 });
+   doc.font('Helvetica').fontSize(10).fillColor(COLORS.lightText)
+      .text(invoiceNumber || 'N/A', 350, 95, { align: 'right', width: 200 });
+
+   doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.text)
+      .text('DATE', 350, 115, { align: 'right', width: 200 });
+   doc.font('Helvetica').fontSize(10).fillColor(COLORS.lightText)
+      .text(date, 350, 130, { align: 'right', width: 200 });
+}
+
+function drawInfoSection(doc, y, leftTitle, leftData, rightTitle, rightData) {
+   const leftX = 40;
+   const rightX = 300;
+
+   // Left Column (e.g., Shipper)
+   doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.primary)
+      .text(leftTitle, leftX, y);
+   doc.rect(leftX, y + 15, 200, 1).fill(COLORS.secondary);
+
+   let currentY = y + 25;
+   doc.font('Helvetica').fontSize(9).fillColor(COLORS.text);
+   leftData.forEach(line => {
+      doc.text(line, leftX, currentY);
+      currentY += 14;
+   });
+
+   // Right Column (e.g., Consignee)
+   doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.primary)
+      .text(rightTitle, rightX, y);
+   doc.rect(rightX, y + 15, 200, 1).fill(COLORS.secondary);
+
+   currentY = y + 25;
+   doc.font('Helvetica').fontSize(9).fillColor(COLORS.text);
+   rightData.forEach(line => {
+      doc.text(line, rightX, currentY);
+      currentY += 14;
+   });
+
+   return Math.max(currentY, y + 25 + (Math.max(leftData.length, rightData.length) * 14)) + 20;
+}
+
+function drawTable(doc, y, columns, data) {
+   const tableLeft = 40;
+   const tableWidth = 515;
+   const headerHeight = 30;
+   const rowHeight = 25;
+   const colSpacing = 5;
+
+   // Draw Header Background
+   doc.rect(tableLeft, y, tableWidth, headerHeight).fill(COLORS.tableHeader);
+
+   // Draw Header Text
+   let currentX = tableLeft + 10;
+   doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.white);
+
+   columns.forEach((col, i) => {
+      doc.text(col.header, currentX, y + 10, { width: col.width, align: col.align || 'left' });
+      currentX += col.width + colSpacing;
+   });
+
+   let currentY = y + headerHeight;
+
+   // Draw Rows
+   doc.font('Helvetica').fontSize(9).fillColor(COLORS.text);
+
+   data.forEach((row, index) => {
+      if (index % 2 === 0) {
+         doc.rect(tableLeft, currentY, tableWidth, rowHeight).fill(COLORS.tableRowEven);
+      }
+
+      // Reset color for text
+      doc.fillColor(COLORS.text);
+
+      let rowX = tableLeft + 10;
+      columns.forEach((col) => {
+         const text = row[col.field] !== undefined ? String(row[col.field]) : '';
+         doc.text(text, rowX, currentY + 8, { width: col.width, align: col.align || 'left' });
+         rowX += col.width + colSpacing;
+      });
+
+      currentY += rowHeight;
+   });
+
+   // Bottom border
+   doc.moveTo(tableLeft, currentY).lineTo(tableLeft + tableWidth, currentY).strokeColor(COLORS.primary).stroke();
+
+   return currentY + 20; // Return new Y position
+}
+
+function drawSummary(doc, y, items) {
+   const x = 350;
+   const width = 200;
+
+   items.forEach(item => {
+      // Background for total
+      if (item.isTotal) {
+         doc.rect(x - 10, y - 5, width + 10, 25).fill(COLORS.primary);
+         doc.fillColor(COLORS.white).font('Helvetica-Bold');
+      } else {
+         doc.fillColor(COLORS.text).font('Helvetica');
+      }
+
+      doc.text(item.label, x, y, { align: 'left' });
+      doc.text(item.value, x, y, { align: 'right', width: width });
+
+      y += 25;
+   });
+
+   return y;
+}
+
+function drawFooter(doc) {
+   const footerY = doc.page.height - 100;
+
+   // Terms & Conditions Box
+   doc.rect(40, footerY, 250, 60).strokeColor(COLORS.accent).lineWidth(1).stroke();
+   doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.primary).text('TERMS & CONDITIONS', 50, footerY + 10);
+   doc.font('Helvetica').fontSize(6).fillColor(COLORS.lightText)
+      .text('1. All claims must be made within 7 days.', 50, footerY + 25)
+      .text('2. Max declared value claim is Rs 100.', 50, footerY + 35)
+      .text('3. Subject to company policies.', 50, footerY + 45);
+
+   // Signature Line
+   doc.moveTo(350, footerY + 50).lineTo(550, footerY + 50).strokeColor(COLORS.text).lineWidth(0.5).stroke();
+   doc.font('Helvetica').fontSize(8).fillColor(COLORS.text).text('Authorized Signature', 350, footerY + 55, { align: 'center', width: 200 });
+
+   // Decorative Bottom
+   const bottomY = doc.page.height - 25;
+   doc.rect(0, bottomY, doc.page.width, 25).fill(COLORS.primary);
+
+   // Generated By and Time
+   const generatedText = `Generated by ${COMPANY_INFO.name} - ${new Date().toLocaleString()}`;
+   doc.font('Helvetica').fontSize(8).fillColor(COLORS.white)
+      .text(generatedText, 0, bottomY + 8, { align: 'center', width: doc.page.width });
+}
+
+
+// --- Specific Invoice Generators ---
+
 function generateDeclaredValueInvoicePDF(doc, invoice) {
-   try {
-      console.log('Generating Declared Value Invoice PDF for:', invoice.id);
+   console.log('Generating Modern Invoice: Declared Value', invoice.id);
+   const shipment = invoice.shipments;
+   const shipper = shipment?.Customer;
+   const consignee = shipment?.consignees;
 
-      const shipment = invoice.shipments;
-      const shipper = shipment?.Customer;
-      const consignee = shipment?.consignees;
+   // 1. Header
+   drawHeader(doc, 'DECLARED VALUE INVOICE', invoice.id.substring(0, 8).toUpperCase(), new Date().toLocaleDateString());
 
-      // Colors
-      const darkGray = '#2C2C2C';
-      const limeGreen = '#00FF00';
-      const lightGreen = '#90EE90';
+   // 2. Info Section
+   const shipperData = [
+      shipper?.personName || 'N/A',
+      `CNIC: ${shipper?.cnic || 'N/A'}`,
+      `NTN: ${shipper?.ntn || 'N/A'}`,
+      `Service: ${invoice.shipments?.service_providers?.name || 'N/A'}`
+   ];
 
-      // Header with decorative blocks
-      doc.rect(0, 0, 100, 80).fill(darkGray); // Top-left block
-      doc.rect(doc.page.width - 100, 0, 50, 80).fill(darkGray); // Top-right dark block
-      doc.rect(doc.page.width - 50, 0, 50, 80).fill(limeGreen); // Top-right green block
+   const consigneeData = [
+      consignee?.personName || 'N/A',
+      consignee?.address || 'N/A',
+      `${consignee?.city || ''}, ${consignee?.country || ''}`,
+      `Phone: ${consignee?.phone || 'N/A'}`
+   ];
 
-      // Main title
-      doc.fontSize(32)
-         .font('Helvetica-Bold')
-         .fillColor('black')
-         .text('SHIPMENT RECEIPT', 120, 30);
+   let y = 160;
+   y = drawInfoSection(doc, y, 'CUSTOMER (SHIPPER)', shipperData, 'CONSIGNEE (RECEIVER)', consigneeData);
 
-      // Green line under title
-      doc.rect(50, 70, doc.page.width - 100, 3).fill(limeGreen);
+   // 3. Table
+   // Corrected widths to sum to 515 (approx)
+   // 255 + 60 + 100 + 100 = 515
+   const columns = [
+      { header: 'DESCRIPTION', width: 255, field: 'description' },
+      { header: 'QTY', width: 60, field: 'qty', align: 'center' },
+      { header: 'UNIT VALUE', width: 100, field: 'price', align: 'right' },
+      { header: 'TOTAL', width: 100, field: 'total', align: 'right' }
+   ];
 
-      // Total declared value (top right)
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text('TOTAL DECLARED VALUE', doc.page.width - 200, 100);
+   const tableData = (invoice.lineItems || []).map(item => ({
+      description: cleanText(item.description),
+      qty: item.quantity || 1,
+      price: `Rs ${item.unitPrice?.toFixed(2) || '0.00'}`,
+      total: `Rs ${item.total?.toFixed(2) || '0.00'}`
+   }));
 
-      doc.fontSize(28)
-         .font('Helvetica-Bold')
-         .text(`Rs ${invoice.total.toFixed(2)}`, doc.page.width - 200, 120);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Date: ${invoice.issuedAt ? new Date(invoice.issuedAt).toLocaleDateString() : new Date().toLocaleDateString()}`, doc.page.width - 200, 160);
-
-      // Line under date
-      doc.rect(doc.page.width - 200, 175, 150, 1).fill('black');
-
-      // Receiver section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('RECEIVER', 50, 200);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Receiver Name: ${consignee?.personName || 'N/A'}`, 50, 230)
-         .text(`Address (Country): ${consignee ? `${consignee.address}, ${consignee.city}, ${consignee.country}` : 'N/A'}`, 50, 250)
-         .text(`Phone Number: ${consignee?.phone || 'N/A'}`, 50, 270);
-
-      // Declared Value section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('DECLARED VALUE', 50, 310);
-
-      // Products table
-      const tableTop = 340;
-      const tableLeft = 50;
-      const colWidths = [200, 80, 100, 100];
-
-      // Table header
-      doc.rect(tableLeft, tableTop, colWidths.reduce((a, b) => a + b, 0), 25).fill(darkGray);
-
-      doc.fillColor('white')
-         .fontSize(12)
-         .font('Helvetica-Bold')
-         .text('PRODUCTS', tableLeft + 5, tableTop + 8)
-         .text('QUANTITY', tableLeft + colWidths[0] + 5, tableTop + 8)
-         .text('PER PRODUCT', tableLeft + colWidths[0] + colWidths[1] + 5, tableTop + 8)
-         .text('TOTAL', tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, tableTop + 8);
-
-      // Table rows
-      let currentY = tableTop + 25;
-      let totalValue = 0;
-
-      if (invoice.lineItems && invoice.lineItems.length > 0) {
-         invoice.lineItems.forEach(item => {
-            doc.fillColor('black')
-               .fontSize(10)
-               .font('Helvetica')
-               .text(item.description, tableLeft + 5, currentY + 5)
-               .text(item.quantity?.toString() || '1', tableLeft + colWidths[0] + 5, currentY + 5)
-               .text(`Rs ${item.unitPrice?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
-               .text(`Rs ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-            totalValue += item.total;
-            currentY += 20;
-         });
-      } else {
-         // No products case
-         doc.fillColor('black')
-            .fontSize(10)
-            .font('Helvetica')
-            .text('No products declared', tableLeft + 5, currentY + 5);
-         currentY += 20;
-      }
-
-      // Total row
-      doc.fillColor('black')
-         .fontSize(12)
-         .font('Helvetica-Bold')
-         .text('Total:', tableLeft + colWidths[0] + 5, currentY + 5)
-         .text(`Rs ${totalValue.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-      // Shipment details
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('Shipment details', 50, currentY + 40);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Service: ${shipment?.service_providers?.name || 'N/A'}`, 50, currentY + 70);
-
-      // Shipper section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('SHIPPER', 50, currentY + 100);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`${shipper?.personName || 'N/A'}`, 50, currentY + 130)
-         .text(`ID Card Number: ${shipper?.cnic || '[]'}`, 50, currentY + 150)
-         .text(`NTN: ${shipper?.ntn || '[]'}`, 50, currentY + 170);
-
-      // Shipping Policy
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('Shipping Policy', 50, currentY + 200);
-
-      doc.fontSize(10)
-         .font('Helvetica')
-         .text('For all shipments processed through our service, the maximum declared value for any parcel is set at Rs 100. In the case of a lost or damaged parcel, the maximum compensation that can be claimed will not exceed Rs 100. No claims above this amount will be accepted under any circumstances.', 50, currentY + 230, {
-            width: doc.page.width - 100,
-            align: 'left'
-         });
-
-      // Footer decorative elements
-      const footerY = doc.page.height - 60;
-      doc.circle(50, footerY, 30).fill(lightGreen);
-      doc.circle(80, footerY, 25).fill(limeGreen);
-      doc.rect(0, doc.page.height - 20, doc.page.width, 20).fill(darkGray);
-
-      console.log('Declared Value Invoice PDF content generated successfully');
-   } catch (error) {
-      console.error('Error generating Declared Value Invoice PDF:', error);
-      throw error;
+   if (tableData.length === 0) {
+      tableData.push({ description: 'No items declared', qty: '-', price: '-', total: 'Rs 0.00' });
    }
+
+   y = drawTable(doc, y, columns, tableData);
+
+   // 4. Summary
+   const summaryItems = [
+      { label: 'Total Declared Value:', value: `Rs ${invoice.total.toFixed(2)}`, isTotal: true }
+   ];
+   drawSummary(doc, y, summaryItems);
+
+   // 5. Footer
+   drawFooter(doc);
 }
 
-// Generate Billing Invoice PDF
 function generateBillingInvoicePDF(doc, invoice) {
-   try {
-      console.log('Generating Billing Invoice PDF for:', invoice.id);
+   console.log('Generating Modern Invoice: Billing', invoice.id);
+   const shipment = invoice.shipments;
+   const shipper = shipment?.Customer;
+   const consignee = shipment?.consignees;
 
-      const shipment = invoice.shipments;
-      const shipper = shipment.Customer;
-      const consignee = shipment.consignees;
+   // 1. Header
+   drawHeader(doc, 'SHIPPING BILL', invoice.id.substring(0, 8).toUpperCase(), new Date().toLocaleDateString());
 
-      // Colors
-      const darkGray = '#2C2C2C';
-      const limeGreen = '#00FF00';
-      const lightGreen = '#90EE90';
+   // 2. Info Section
+   const shipperData = [
+      shipper?.personName || 'N/A',
+      `CNIC: ${shipper?.cnic || 'N/A'}`,
+      `NTN: ${shipper?.ntn || 'N/A'}`,
+      `Origin: ${shipment?.origin_cities?.name || 'N/A'}`
+   ];
 
-      // Header with decorative blocks
-      doc.rect(0, 0, 100, 80).fill(darkGray); // Top-left block
-      doc.rect(doc.page.width - 100, 0, 50, 80).fill(darkGray); // Top-right dark block
-      doc.rect(doc.page.width - 50, 0, 50, 80).fill(limeGreen); // Top-right green block
+   const consigneeData = [
+      consignee?.personName || 'N/A',
+      `Destination: ${shipment?.destination_cities?.name || 'N/A'}`,
+      `Service: ${shipment?.service_providers?.name || 'N/A'}`
+   ];
 
-      // Main title
-      doc.fontSize(32)
-         .font('Helvetica-Bold')
-         .fillColor('black')
-         .text('SHIPMENT RECEIPT', 120, 30);
+   let y = 160;
+   y = drawInfoSection(doc, y, 'SHIPPER DETAILS', shipperData, 'SHIPMENT DETAILS', consigneeData);
 
-      // Green line under title
-      doc.rect(50, 70, doc.page.width - 100, 3).fill(limeGreen);
+   // 3. Table
+   // Corrected widths to sum to 515
+   // 255 + 80 + 80 + 100 = 515
+   const columns = [
+      { header: 'DESCRIPTION', width: 255, field: 'description' },
+      { header: 'WEIGHT (KG)', width: 80, field: 'weight', align: 'center' },
+      { header: 'VOL. WEIGHT', width: 80, field: 'volWeight', align: 'center' },
+      { header: 'AMOUNT', width: 100, field: 'amount', align: 'right' }
+   ];
 
-      // Total billed amount (top right)
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text('TOTAL BILLED AMOUNT', doc.page.width - 200, 100);
-
-      doc.fontSize(28)
-         .font('Helvetica-Bold')
-         .text(`Rs ${invoice.total.toFixed(2)}`, doc.page.width - 200, 120);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Date: ${invoice.issuedAt ? new Date(invoice.issuedAt).toLocaleDateString() : new Date().toLocaleDateString()}`, doc.page.width - 200, 160);
-
-      // Line under date
-      doc.rect(doc.page.width - 200, 175, 150, 1).fill('black');
-
-      // Receiver section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('RECEIVER', 50, 200);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Receiver Name: ${consignee?.personName || 'N/A'}`, 50, 230)
-         .text(`Address (Country): ${consignee ? `${consignee.address}, ${consignee.city}, ${consignee.country}` : 'N/A'}`, 50, 250)
-         .text(`Phone Number: ${consignee?.phone || 'N/A'}`, 50, 270);
-
-      // Billing details section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('BILLING DETAILS', 50, 310);
-
-      // Billing table
-      const tableTop = 340;
-      const tableLeft = 50;
-      const colWidths = [200, 80, 100, 100];
-
-      // Table header
-      doc.rect(tableLeft, tableTop, colWidths.reduce((a, b) => a + b, 0), 25).fill(darkGray);
-
-      doc.fillColor('white')
-         .fontSize(12)
-         .font('Helvetica-Bold')
-         .text('ITEM DESCRIPTION', tableLeft + 5, tableTop + 8)
-         .text('WEIGHT', tableLeft + colWidths[0] + 5, tableTop + 8)
-         .text('DM WEIGHT', tableLeft + colWidths[0] + colWidths[1] + 5, tableTop + 8)
-         .text('AMOUNT', tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, tableTop + 8);
-
-      // Table rows
-      let currentY = tableTop + 25;
-      let totalAmount = 0;
-
-      if (invoice.lineItems && invoice.lineItems.length > 0) {
-         invoice.lineItems.forEach(item => {
-            doc.fillColor('black')
-               .fontSize(10)
-               .font('Helvetica')
-               .text(item.description, tableLeft + 5, currentY + 5)
-               .text(item.quantity ? `${item.quantity} kg` : '---', tableLeft + colWidths[0] + 5, currentY + 5)
-               .text('---', tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
-               .text(`Rs ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-            totalAmount += item.total;
-            currentY += 20;
-         });
-      }
-
-      // Total row
-      doc.fillColor('black')
-         .fontSize(12)
-         .font('Helvetica-Bold')
-         .text('Total:', tableLeft + colWidths[0] + 5, currentY + 5)
-         .text(`Rs ${totalAmount.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-      // Shipment details
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('Shipment details', 50, currentY + 40);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Service: ${shipment.service_providers.name}`, 50, currentY + 70)
-         .text(`Actual Weight: ${shipment.actualWeightKg}kg`, 50, currentY + 90)
-         .text(`Volumetric Weight: ${shipment.volumeWeightKg}kg`, 50, currentY + 110)
-         .text(`Charged Weight: ${shipment.chargedWeightKg}kg`, 50, currentY + 130);
-
-      // Shipper section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('SHIPPER', 50, currentY + 160);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`${shipper.personName}`, 50, currentY + 190)
-         .text(`ID Card Number: ${shipper.cnic || '[]'}`, 50, currentY + 210)
-         .text(`NTN: ${shipper.ntn || '[]'}`, 50, currentY + 230);
-
-      // Footer decorative elements
-      const footerY = doc.page.height - 60;
-      doc.circle(50, footerY, 30).fill(lightGreen);
-      doc.circle(80, footerY, 25).fill(limeGreen);
-      doc.rect(0, doc.page.height - 20, doc.page.width, 20).fill(darkGray);
-
-      console.log('Billing Invoice PDF content generated successfully');
-   } catch (error) {
-      console.error('Error generating Billing Invoice PDF:', error);
-      throw error;
+   let tableData = [];
+   if (invoice.lineItems && invoice.lineItems.length > 0) {
+      tableData = invoice.lineItems.map(item => ({
+         description: cleanText(item.description),
+         weight: item.quantity || shipment.actualWeightKg,
+         volWeight: shipment.volumeWeightKg || '-',
+         amount: `Rs ${item.total.toFixed(2)}`
+      }));
+   } else {
+      tableData.push({
+         description: 'Shipping Charges',
+         weight: shipment.actualWeightKg,
+         volWeight: shipment.volumeWeightKg,
+         amount: `Rs ${invoice.total.toFixed(2)}`
+      });
    }
+
+   y = drawTable(doc, y, columns, tableData);
+
+   // 4. Summary
+   const summaryItems = [
+      { label: 'Charged Weight:', value: `${shipment.chargedWeightKg} KG` },
+      { label: 'Total Amount:', value: `Rs ${invoice.total.toFixed(2)}`, isTotal: true }
+   ];
+   drawSummary(doc, y, summaryItems);
+
+   // 5. Footer
+   drawFooter(doc);
 }
 
-// Generate Main Invoice PDF
 function generateMainInvoicePDF(doc, invoice) {
-   try {
-      console.log('Generating Main Invoice PDF for:', invoice.id);
+   const customer = invoice.customer;
 
-      const customer = invoice.customer;
+   drawHeader(doc, 'GENERAL INVOICE', invoice.invoiceNumber, new Date(invoice.issuedDate).toLocaleDateString());
 
-      // Colors
-      const darkGray = '#2C2C2C';
-      const limeGreen = '#00FF00';
-      const lightGreen = '#90EE90';
+   const customerData = [
+      customer?.name || 'Guest',
+      customer?.company || '',
+      customer?.email || '',
+      customer?.phone || ''
+   ];
 
-      // Header with decorative blocks
-      doc.rect(0, 0, 100, 80).fill(darkGray); // Top-left block
-      doc.rect(doc.page.width - 100, 0, 50, 80).fill(darkGray); // Top-right dark block
-      doc.rect(doc.page.width - 50, 0, 50, 80).fill(limeGreen); // Top-right green block
+   let y = 160;
+   y = drawInfoSection(doc, y, 'ISSUED TO', customerData, 'PAYMENT INFO', [`Status: ${invoice.status}`, `Due: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}`]);
 
-      // Main title
-      doc.fontSize(32)
-         .font('Helvetica-Bold')
-         .fillColor('black')
-         .text('INVOICE', 120, 30);
+   // 255 + 60 + 100 + 100 = 515
+   const columns = [
+      { header: 'ITEM', width: 255, field: 'description' },
+      { header: 'QTY', width: 60, field: 'qty', align: 'center' },
+      { header: 'UNIT PRICE', width: 100, field: 'price', align: 'right' },
+      { header: 'TOTAL', width: 100, field: 'total', align: 'right' }
+   ];
 
-      // Green line under title
-      doc.rect(50, 70, doc.page.width - 100, 3).fill(limeGreen);
+   const tableData = (invoice.lineItems || []).map(item => ({
+      description: cleanText(item.description || 'Item'),
+      qty: item.quantity || 1,
+      price: `Rs ${item.unitPrice?.toFixed(2) || 0}`,
+      total: `Rs ${item.total?.toFixed(2) || 0}`
+   }));
 
-      // Invoice details (top right)
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text('INVOICE NUMBER', doc.page.width - 200, 100);
+   y = drawTable(doc, y, columns, tableData);
 
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text(invoice.invoiceNumber, doc.page.width - 200, 120);
+   const summaryItems = [
+      { label: 'Subtotal:', value: `Rs ${(invoice.total - (invoice.tax || 0)).toFixed(2)}` },
+      { label: 'Tax:', value: `Rs ${invoice.tax?.toFixed(2) || '0.00'}` },
+      { label: 'Total Due:', value: `Rs ${invoice.total.toFixed(2)}`, isTotal: true }
+   ];
 
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Date: ${new Date(invoice.issuedDate).toLocaleDateString()}`, doc.page.width - 200, 150);
-
-      if (invoice.dueDate) {
-         doc.fontSize(12)
-            .font('Helvetica')
-            .text(`Due: ${new Date(invoice.dueDate).toLocaleDateString()}`, doc.page.width - 200, 170);
-      }
-
-      // Line under details
-      doc.rect(doc.page.width - 200, 185, 150, 1).fill('black');
-
-      // Customer section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('BILL TO', 50, 200);
-
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Name: ${customer.name}`, 50, 230);
-
-      if (customer.company) {
-         doc.text(`Company: ${customer.company}`, 50, 250);
-      }
-      if (customer.email) {
-         doc.text(`Email: ${customer.email}`, 50, 270);
-      }
-      if (customer.phone) {
-         doc.text(`Phone: ${customer.phone}`, 50, 290);
-      }
-
-      // Invoice items section
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('INVOICE ITEMS', 50, 330);
-
-      // Items table
-      const tableTop = 360;
-      const tableLeft = 50;
-      const colWidths = [200, 80, 100, 100];
-
-      // Table header
-      doc.rect(tableLeft, tableTop, colWidths.reduce((a, b) => a + b, 0), 25).fill(darkGray);
-
-      doc.fillColor('white')
-         .fontSize(12)
-         .font('Helvetica-Bold')
-         .text('DESCRIPTION', tableLeft + 5, tableTop + 8)
-         .text('QUANTITY', tableLeft + colWidths[0] + 5, tableTop + 8)
-         .text('UNIT PRICE', tableLeft + colWidths[0] + colWidths[1] + 5, tableTop + 8)
-         .text('TOTAL', tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, tableTop + 8);
-
-      // Table rows
-      let currentY = tableTop + 25;
-      let subtotal = 0;
-
-      if (invoice.lineItems && invoice.lineItems.length > 0) {
-         invoice.lineItems.forEach(item => {
-            doc.fillColor('black')
-               .fontSize(10)
-               .font('Helvetica')
-               .text(item.description || 'Service', tableLeft + 5, currentY + 5)
-               .text(item.quantity?.toString() || '1', tableLeft + colWidths[0] + 5, currentY + 5)
-               .text(`Rs ${item.unitPrice?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 5)
-               .text(`Rs ${item.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-            subtotal += item.total;
-            currentY += 20;
-         });
-      } else {
-         // No items case
-         doc.fillColor('black')
-            .fontSize(10)
-            .font('Helvetica')
-            .text('No items', tableLeft + 5, currentY + 5);
-         currentY += 20;
-      }
-
-      // Totals section
-      currentY += 20;
-      doc.fillColor('black')
-         .fontSize(12)
-         .font('Helvetica')
-         .text('Subtotal:', tableLeft + colWidths[0] + 5, currentY + 5)
-         .text(`Rs ${subtotal.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-      currentY += 20;
-      doc.text('Tax:', tableLeft + colWidths[0] + 5, currentY + 5)
-         .text(`Rs ${invoice.tax?.toFixed(2) || '0.00'}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-      currentY += 20;
-      doc.fontSize(14)
-         .font('Helvetica-Bold')
-         .text('Total:', tableLeft + colWidths[0] + 5, currentY + 5)
-         .text(`Rs ${invoice.total.toFixed(2)}`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 5);
-
-      // Payment status
-      currentY += 40;
-      doc.fontSize(16)
-         .font('Helvetica-Bold')
-         .text('PAYMENT STATUS', 50, currentY);
-
-      currentY += 30;
-      doc.fontSize(12)
-         .font('Helvetica')
-         .text(`Status: ${invoice.status}`, 50, currentY);
-
-      if (invoice.amountPaid > 0) {
-         currentY += 20;
-         doc.text(`Amount Paid: Rs ${invoice.amountPaid.toFixed(2)}`, 50, currentY);
-      }
-
-      if (invoice.balanceDue > 0) {
-         currentY += 20;
-         doc.text(`Balance Due: Rs ${invoice.balanceDue.toFixed(2)}`, 50, currentY);
-      }
-
-      // Payment history
-      if (invoice.payments && invoice.payments.length > 0) {
-         currentY += 40;
-         doc.fontSize(16)
-            .font('Helvetica-Bold')
-            .text('PAYMENT HISTORY', 50, currentY);
-
-         currentY += 30;
-         invoice.payments.forEach(payment => {
-            doc.fontSize(10)
-               .font('Helvetica')
-               .text(`${new Date(payment.createdAt).toLocaleDateString()} - ${payment.paymentType} - Rs ${payment.amount.toFixed(2)}`, 50, currentY);
-            currentY += 15;
-         });
-      }
-
-      // Footer decorative elements
-      const footerY = doc.page.height - 60;
-      doc.circle(50, footerY, 30).fill(lightGreen);
-      doc.circle(80, footerY, 25).fill(limeGreen);
-      doc.rect(0, doc.page.height - 20, doc.page.width, 20).fill(darkGray);
-
-      console.log('Main Invoice PDF content generated successfully');
-   } catch (error) {
-      console.error('Error generating Main Invoice PDF:', error);
-      throw error;
-   }
+   drawSummary(doc, y, summaryItems);
+   drawFooter(doc);
 }
 
-// Generate generic invoice PDF
 function generateGenericInvoicePDF(doc, invoiceId) {
-   doc.fontSize(24)
-      .font('Helvetica-Bold')
-      .text('Invoice', 50, 100);
-
-   doc.fontSize(12)
-      .font('Helvetica')
-      .text(`Invoice ID: ${invoiceId}`, 50, 150)
-      .text(`Generated: ${new Date().toLocaleString()}`, 50, 170);
+   drawHeader(doc, 'INVOICE', invoiceId, new Date().toLocaleDateString());
+   doc.text('Details not available.', 50, 200);
+   drawFooter(doc);
 }

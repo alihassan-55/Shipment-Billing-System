@@ -32,7 +32,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     console.log('Loading invoices for shipment:', shipmentId, 'status:', shipmentStatus);
     try {
       const response = await apiService.getShipmentInvoices(shipmentId);
-      
+
       if (response.success) {
         console.log('Invoices loaded:', response.data.invoices);
         setInvoices(response.data.invoices || []);
@@ -50,7 +50,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     setGenerating(true);
     try {
       const response = await apiService.generateShipmentInvoices(shipmentId);
-      
+
       if (response.success) {
         setInvoices(response.data.invoices ? Object.values(response.data.invoices) : []);
       } else {
@@ -67,7 +67,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const regeneratePDF = async (invoiceId) => {
     try {
       const response = await apiService.regenerateInvoicePDF(invoiceId);
-      
+
       if (response.success) {
         alert('PDF regenerated successfully');
         loadInvoices(); // Reload to get updated PDF URL
@@ -80,13 +80,33 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     }
   };
 
-  const downloadPDF = (pdfUrl) => {
-    if (pdfUrl) {
-      // Construct full URL with server address
-      const fullUrl = pdfUrl.startsWith('http') ? pdfUrl : `${apiService.getBaseUrl(false)}${pdfUrl}`;
-      window.open(fullUrl, '_blank');
-    } else {
+  const handlePdfAction = async (pdfUrl, action = 'view') => {
+    if (!pdfUrl) {
       alert('PDF not available yet. Please regenerate PDF.');
+      return;
+    }
+
+    try {
+      const blob = await apiService.fetchBlob(pdfUrl);
+      const url = window.URL.createObjectURL(blob);
+
+      if (action === 'view') {
+        window.open(url, '_blank');
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        // Try to derive filename from url or sensitive default
+        const fileName = pdfUrl.split('/').pop() || 'invoice.pdf';
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        // For download trigger, we can revoke shortly after, but for view we rely on browser copy
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      alert('Failed to download PDF: ' + error.message);
     }
   };
 
@@ -97,7 +117,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
       'Paid': { variant: 'success', label: 'Paid' },
       'Posted': { variant: 'success', label: 'Posted' }
     };
-    
+
     const config = statusConfig[status] || { variant: 'secondary', label: status };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
@@ -129,8 +149,8 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
         <CardTitle className="flex items-center justify-between">
           <span>Invoices</span>
           {invoices.length === 0 && shipmentStatus === 'CONFIRMED' && (
-            <Button 
-              onClick={generateInvoices} 
+            <Button
+              onClick={generateInvoices}
               disabled={generating}
               size="sm"
             >
@@ -149,8 +169,8 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
           )}
         </CardTitle>
         <CardDescription>
-          {invoices.length === 0 
-            ? shipmentStatus === 'CONFIRMED' 
+          {invoices.length === 0
+            ? shipmentStatus === 'CONFIRMED'
               ? 'Invoices are automatically generated when shipment is confirmed'
               : 'Invoices will be automatically generated after shipment confirmation'
             : 'Two invoices are automatically generated for each confirmed shipment'
@@ -160,7 +180,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
       <CardContent>
         {invoices.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            {shipmentStatus === 'CONFIRMED' 
+            {shipmentStatus === 'CONFIRMED'
               ? 'Invoices are being generated automatically...'
               : 'Shipment must be confirmed to generate invoices'
             }
@@ -197,7 +217,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => downloadPDF(invoice.pdfUrl)}
+                    onClick={() => handlePdfAction(invoice.pdfUrl, 'view')}
                     disabled={!invoice.pdfUrl}
                   >
                     <Eye className="h-4 w-4 mr-2" />
@@ -206,7 +226,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => downloadPDF(invoice.pdfUrl)}
+                    onClick={() => handlePdfAction(invoice.pdfUrl, 'download')}
                     disabled={!invoice.pdfUrl}
                   >
                     <Download className="h-4 w-4 mr-2" />

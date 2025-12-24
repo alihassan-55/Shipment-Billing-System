@@ -3,6 +3,18 @@ import { ShipmentInvoiceService } from '../services/shipmentInvoiceService.js';
 import { s3Client } from '../config/supabase.js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 
+// Helper to transform invoice for client Response
+const transformInvoice = (invoice) => {
+    if (!invoice) return invoice;
+    // Clone to avoid mutating original if needed
+    const inv = { ...invoice };
+    if (inv.pdfUrl) {
+        // Transform S3 Key to API Download URL
+        inv.pdfUrl = `/api/shipment-invoices/invoices/${inv.id}/pdf`;
+    }
+    return inv;
+};
+
 /**
  * Generate invoices for a shipment
  * POST /api/shipments/:id/generate-invoices
@@ -15,8 +27,8 @@ export async function generateShipmentInvoices(req, res) {
         return res.json({
             success: true,
             invoices: {
-                declaredValueInvoice: invoices.declaredValueInvoice,
-                billingInvoice: invoices.billingInvoice
+                declaredValueInvoice: transformInvoice(invoices.declaredValueInvoice),
+                billingInvoice: transformInvoice(invoices.billingInvoice)
             }
         });
     } catch (error) {
@@ -34,7 +46,8 @@ export async function getShipmentInvoices(req, res) {
 
     try {
         const invoices = await ShipmentInvoiceService.getShipmentInvoices(id);
-        return res.json({ success: true, invoices });
+        const transformedInvoices = invoices.map(transformInvoice);
+        return res.json({ success: true, invoices: transformedInvoices });
     } catch (error) {
         console.error('Error fetching shipment invoices:', error);
         return res.status(500).json({ error: 'Failed to fetch invoices: ' + error.message });
@@ -69,7 +82,7 @@ export async function getInvoice(req, res) {
             return res.status(404).json({ error: 'Invoice not found' });
         }
 
-        return res.json({ success: true, invoice });
+        return res.json({ success: true, invoice: transformInvoice(invoice) });
     } catch (error) {
         console.error('Error fetching invoice:', error);
         return res.status(500).json({ error: 'Failed to fetch invoice: ' + error.message });

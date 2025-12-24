@@ -30,9 +30,8 @@ export class ShipmentInvoiceService {
    * @param {string} shipmentId - The shipment ID
    * @returns {Promise<{declaredValueInvoice: Object, billingInvoice: Object}>}
    */
-  static async createForShipment(shipmentId) {
-    // Start transaction for DB operations
-    const result = await prisma.$transaction(async (tx) => {
+  static async createForShipment(shipmentId, externalTx = null) {
+    const dbOperation = async (tx) => {
       // Load shipment with all related data
       const shipment = await tx.shipments.findUnique({
         where: { id: shipmentId },
@@ -82,32 +81,38 @@ export class ShipmentInvoiceService {
         declaredValueInvoice,
         billingInvoice
       };
-    });
+    };
+
+    const result = externalTx
+      ? await dbOperation(externalTx)
+      : await prisma.$transaction(dbOperation);
 
     // Transaction committed. Now generate PDFs asynchronously (or synchronously but outside transaction)
     // We do this here so S3 uploads don't block the DB transaction
-    try {
-      if (result.declaredValueInvoice) {
-        // Fetch fresh data if needed, but generateInvoicePDF handles fetching if passed ID
-        // Note: We need to pass the shipment data if we want to avoid re-fetching inside, 
-        // but since we are outside the transaction now, re-fetching inside generateInvoicePDF is safer 
-        // and shouldn't impact performance significantly compared to S3 upload time.
-        // However, generateInvoicePDF logic checks "if (!invoice) ... fetch".
-        // Passing just ID and Type is cleanest here, let it fetch what it needs.
-        console.log('Generating PDF for Declared Value Invoice:', result.declaredValueInvoice.id);
-        const pdfUrl = await this.generateInvoicePDF(result.declaredValueInvoice.id, 'DECLARED_VALUE');
-        result.declaredValueInvoice.pdfUrl = pdfUrl;
-      }
+    if (!externalTx) {
+      try {
+        if (result.declaredValueInvoice) {
+          // Fetch fresh data if needed, but generateInvoicePDF handles fetching if passed ID
+          // Note: We need to pass the shipment data if we want to avoid re-fetching inside, 
+          // but since we are outside the transaction now, re-fetching inside generateInvoicePDF is safer 
+          // and shouldn't impact performance significantly compared to S3 upload time.
+          // However, generateInvoicePDF logic checks "if (!invoice) ... fetch".
+          // Passing just ID and Type is cleanest here, let it fetch what it needs.
+          console.log('Generating PDF for Declared Value Invoice:', result.declaredValueInvoice.id);
+          const pdfUrl = await this.generateInvoicePDF(result.declaredValueInvoice.id, 'DECLARED_VALUE');
+          result.declaredValueInvoice.pdfUrl = pdfUrl;
+        }
 
-      if (result.billingInvoice) {
-        console.log('Generating PDF for Billing Invoice:', result.billingInvoice.id);
-        const pdfUrl = await this.generateInvoicePDF(result.billingInvoice.id, 'BILLING');
-        result.billingInvoice.pdfUrl = pdfUrl;
+        if (result.billingInvoice) {
+          console.log('Generating PDF for Billing Invoice:', result.billingInvoice.id);
+          const pdfUrl = await this.generateInvoicePDF(result.billingInvoice.id, 'BILLING');
+          result.billingInvoice.pdfUrl = pdfUrl;
+        }
+      } catch (error) {
+        console.error('Error generating PDFs after invoice creation:', error);
+        // We don't throw here, as the invoices are already created and valid.
+        // The user can regenerate PDFs later if needed.
       }
-    } catch (error) {
-      console.error('Error generating PDFs after invoice creation:', error);
-      // We don't throw here, as the invoices are already created and valid.
-      // The user can regenerate PDFs later if needed.
     }
 
     return result;
