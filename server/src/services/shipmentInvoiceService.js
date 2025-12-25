@@ -8,7 +8,7 @@ class InvoiceNumberService {
   static async getNextInvoiceNumber(type) {
     const prefix = type === 'DECLARED_VALUE' ? 'DV' : 'BL';
     const year = new Date().getFullYear();
-    
+
     // Count existing invoices of this type for this year
     const count = await prisma.shipment_invoices.count({
       where: {
@@ -17,7 +17,7 @@ class InvoiceNumberService {
         }
       }
     });
-    
+
     const nextNumber = (count + 1).toString().padStart(6, '0');
     return `${prefix}-${year}-${nextNumber}`;
   }
@@ -30,8 +30,8 @@ export class ShipmentInvoiceService {
    * @param {string} shipmentId - The shipment ID
    * @returns {Promise<{declaredValueInvoice: Object, billingInvoice: Object}>}
    */
-  static async createForShipment(shipmentId) {
-    return await prisma.$transaction(async (tx) => {
+  static async createForShipment(shipmentId, externalTx = null) {
+    const dbOperation = async (tx) => {
       // Load shipment with all related data
       const shipment = await tx.shipments.findUnique({
         where: { id: shipmentId },
@@ -70,7 +70,7 @@ export class ShipmentInvoiceService {
 
       // Create Declared Value Invoice
       const declaredValueInvoice = await this.createDeclaredValueInvoice(shipment, tx);
-      
+
       // Create Billing Invoice
       const billingInvoice = await this.createBillingInvoice(shipment, tx);
 
@@ -81,7 +81,41 @@ export class ShipmentInvoiceService {
         declaredValueInvoice,
         billingInvoice
       };
-    });
+    };
+
+    const result = externalTx
+      ? await dbOperation(externalTx)
+      : await prisma.$transaction(dbOperation);
+
+    // Transaction committed. Now generate PDFs asynchronously (or synchronously but outside transaction)
+    // We do this here so S3 uploads don't block the DB transaction
+    if (!externalTx) {
+      try {
+        if (result.declaredValueInvoice) {
+          // Fetch fresh data if needed, but generateInvoicePDF handles fetching if passed ID
+          // Note: We need to pass the shipment data if we want to avoid re-fetching inside, 
+          // but since we are outside the transaction now, re-fetching inside generateInvoicePDF is safer 
+          // and shouldn't impact performance significantly compared to S3 upload time.
+          // However, generateInvoicePDF logic checks "if (!invoice) ... fetch".
+          // Passing just ID and Type is cleanest here, let it fetch what it needs.
+          console.log('Generating PDF for Declared Value Invoice:', result.declaredValueInvoice.id);
+          const pdfUrl = await this.generateInvoicePDF(result.declaredValueInvoice.id, 'DECLARED_VALUE');
+          result.declaredValueInvoice.pdfUrl = pdfUrl;
+        }
+
+        if (result.billingInvoice) {
+          console.log('Generating PDF for Billing Invoice:', result.billingInvoice.id);
+          const pdfUrl = await this.generateInvoicePDF(result.billingInvoice.id, 'BILLING');
+          result.billingInvoice.pdfUrl = pdfUrl;
+        }
+      } catch (error) {
+        console.error('Error generating PDFs after invoice creation:', error);
+        // We don't throw here, as the invoices are already created and valid.
+        // The user can regenerate PDFs later if needed.
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -89,7 +123,7 @@ export class ShipmentInvoiceService {
    */
   static async createDeclaredValueInvoice(shipment, tx) {
     const invoiceNumber = await InvoiceNumberService.getNextInvoiceNumber('DECLARED_VALUE');
-    
+
     // Calculate declared value from product items
     const declaredValue = (shipment.product_invoice_items || []).reduce(
       (sum, item) => sum + (item.pieces * item.unitValue), 0
@@ -123,13 +157,6 @@ export class ShipmentInvoiceService {
       }
     });
 
-    // Generate PDF synchronously - pass shipment data
-    const invoiceWithShipment = {
-      ...invoice,
-      shipments: shipment
-    };
-    const pdfPath = await this.generateInvoicePDF(invoice.id, 'DECLARED_VALUE', invoiceWithShipment, tx);
-
     return invoice;
   }
 
@@ -138,16 +165,16 @@ export class ShipmentInvoiceService {
    */
   static async createBillingInvoice(shipment, tx) {
     const invoiceNumber = await InvoiceNumberService.getNextInvoiceNumber('BILLING');
-    
+
     if (!shipment.billing_invoices) {
       throw new Error('Billing invoice data not found for shipment');
     }
 
     const billing = shipment.billing_invoices;
-    
+
     // Create line items for billing invoice
     const lineItems = [];
-    
+
     // Base freight line
     if (billing.ratePerKg && billing.totalRate) {
       lineItems.push({
@@ -206,7 +233,7 @@ export class ShipmentInvoiceService {
     // Adjustment line (if any)
     const calculatedTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
     const adjustment = billing.grandTotal - calculatedTotal;
-    
+
     if (Math.abs(adjustment) > 0.01) {
       lineItems.push({
         id: crypto.randomUUID(),
@@ -256,13 +283,6 @@ export class ShipmentInvoiceService {
       });
     }
 
-    // Generate PDF synchronously - pass shipment data
-    const invoiceWithShipment = {
-      ...invoice,
-      shipments: shipment
-    };
-    const pdfPath = await this.generateInvoicePDF(invoice.id, 'BILLING', invoiceWithShipment, tx);
-
     return invoice;
   }
 
@@ -272,7 +292,7 @@ export class ShipmentInvoiceService {
   static async generateInvoicePDF(invoiceId, type, invoiceData = null, tx = null) {
     try {
       let invoice = invoiceData;
-      
+
       // If invoice data is not provided, fetch it from database
       if (!invoice) {
         const prismaClient = tx || prisma;
@@ -299,7 +319,7 @@ export class ShipmentInvoiceService {
 
       // Generate PDF using existing PDF generator
       const pdfPath = await generateInvoicePDF(invoiceId, type, invoice);
-      
+
       // Update invoice with PDF URL using the same transaction context
       const prismaClient = tx || prisma;
       await prismaClient.shipment_invoices.update({
@@ -352,7 +372,7 @@ export class ShipmentInvoiceService {
 
     // Generate main invoice number
     const invoiceNumber = await this.generateMainInvoiceNumber();
-    
+
     // Create main invoice
     const mainInvoice = await tx.invoice.create({
       data: {
@@ -423,7 +443,7 @@ export class ShipmentInvoiceService {
         }
       }
     });
-    
+
     const nextNumber = (count + 1).toString().padStart(6, '0');
     return `INV-${year}-${nextNumber}`;
   }

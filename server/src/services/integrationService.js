@@ -4,17 +4,17 @@
 
 import { prisma } from '../db/client.js';
 import crypto from 'crypto';
-import { 
-  LEDGER_ENTRY_TYPES, 
-  INVOICE_STATUSES, 
+import {
+  LEDGER_ENTRY_TYPES,
+  INVOICE_STATUSES,
   PAYMENT_METHODS,
   REFERENCE_FORMATS,
   BUSINESS_RULES,
-  ERROR_MESSAGES 
+  ERROR_MESSAGES
 } from '../types/integration.js';
 
 export class IntegrationService {
-  
+
   /**
    * Complete Shipment Creation Flow
    * Creates shipment, billing invoice, and ledger entries in one transaction
@@ -28,11 +28,11 @@ export class IntegrationService {
       terms,
       boxes,
       actualWeightKg,
-        volumeWeightKg,
-        chargedWeightKg,
+      volumeWeightKg,
+      chargedWeightKg,
       productInvoice,
       billingInvoice,
-        status = 'Draft'
+      status = 'Draft'
     } = shipmentData;
 
     return await prisma.$transaction(async (tx) => {
@@ -109,7 +109,7 @@ export class IntegrationService {
    * Confirms shipment and creates all related invoices and ledger entries
    */
   static async confirmShipmentWithInvoices(shipmentId, userId) {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Update shipment status
       const shipment = await tx.shipments.update({
         where: { id: shipmentId },
@@ -123,12 +123,46 @@ export class IntegrationService {
 
       // 2. Create shipment invoices (Declared Value + Billing)
       const { ShipmentInvoiceService } = await import('./shipmentInvoiceService.js');
-      const invoices = await ShipmentInvoiceService.createForShipment(shipmentId);
+      // PASS THE EXISTING TRANSACTION (tx) to avoid deadlock
+      const invoices = await ShipmentInvoiceService.createForShipment(shipmentId, tx);
 
       // Main customer invoice is created inside ShipmentInvoiceService.createForShipment
 
       return { shipment, invoices };
+    }, {
+      maxWait: 5000, // default: 2000
+      timeout: 20000 // default: 5000
     });
+
+    // 3. Post-Transaction: Generate PDFs securely
+    // Now that the transaction is committed (row lock released), we can safely generate PDFs/upload to S3
+    const { ShipmentInvoiceService } = await import('./shipmentInvoiceService.js');
+    try {
+      console.log('Starting async PDF generation for shipment:', shipmentId);
+
+      if (result.invoices && result.invoices.declaredValueInvoice) {
+        const invId = result.invoices.declaredValueInvoice.id;
+        console.log('Generating PDF for DV Invoice:', invId);
+        const pdfPath = await ShipmentInvoiceService.regeneratePDF(invId);
+        console.log('DV Invoice PDF generated at:', pdfPath);
+        result.invoices.declaredValueInvoice.pdfUrl = pdfPath;
+      }
+
+      if (result.invoices && result.invoices.billingInvoice) {
+        const invId = result.invoices.billingInvoice.id;
+        console.log('Generating PDF for Billing Invoice:', invId);
+        const pdfPath = await ShipmentInvoiceService.regeneratePDF(invId);
+        console.log('Billing Invoice PDF generated at:', pdfPath);
+        result.invoices.billingInvoice.pdfUrl = pdfPath;
+      }
+
+      console.log('Async PDF generation completed. URLs attached to response.');
+    } catch (error) {
+      console.error('Error in post-confirmation PDF generation:', error);
+      // We log only; do not fail the request as the shipment is already confirmed and invoiced.
+    }
+
+    return result;
   }
 
   /**
@@ -249,7 +283,7 @@ export class IntegrationService {
    */
   static async getCustomerFinancialOverview(customerId, filters = {}) {
     const { startDate, endDate, page = 1, limit = 20 } = filters;
-    
+
     const whereClause = { customerId };
     if (startDate || endDate) {
       whereClause.createdAt = {};
@@ -345,16 +379,16 @@ export class IntegrationService {
    */
   static async createLedgerEntry(tx, entryData) {
     const { customerId, referenceId, entryType, description, debit, credit } = entryData;
-    
+
     // Get current customer balance
     const customer = await tx.customer.findUnique({
       where: { id: customerId },
       select: { ledgerBalance: true }
     });
 
-   const debitAmount = Number(debit) || 0;
- const creditAmount = Number(credit) || 0;
-const newBalance = customer.ledgerBalance + debitAmount - creditAmount;
+    const debitAmount = Number(debit) || 0;
+    const creditAmount = Number(credit) || 0;
+    const newBalance = customer.ledgerBalance + debitAmount - creditAmount;
 
     const ledgerEntry = await tx.ledgerEntry.create({
       data: {
@@ -388,7 +422,7 @@ const newBalance = customer.ledgerBalance + debitAmount - creditAmount;
    */
   static async createMainInvoiceFromShipment(shipment, billingInvoice, tx) {
     const invoiceNumber = await this.generateInvoiceNumber();
-    
+
     const mainInvoice = await tx.invoice.create({
       data: {
         id: crypto.randomUUID(),

@@ -34,7 +34,7 @@ export function createApp() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        connectSrc: ["'self'", process.env.CLIENT_URL || 'https://shipment-billing-system.onrender.com'],
+        connectSrc: ["'self'", process.env.CLIENT_URL],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
         imgSrc: ["'self'", 'data:'],
@@ -59,26 +59,9 @@ export function createApp() {
   app.use(express.json());
   app.use(morgan('dev'));
 
-  // Create uploads directory if it doesn't exist
-  const uploadsDir = path.join(__dirname, '../uploads');
-  const invoicesDir = path.join(uploadsDir, 'invoices');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.mkdirSync(invoicesDir, { recursive: true });
 
-  // Serve static files (PDFs) with CORS headers
-  app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    next();
-  }, express.static(uploadsDir, {
-    setHeaders: (res, path) => {
-      if (path.endsWith('.pdf')) {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline');
-      }
-    }
-  }));
+  // Uploads directory creation and static serving removed in favor of Supabase Storage
+
 
   // Serve built client files if they exist (production or development with build)
   const clientBuildPath = path.join(__dirname, '../../client/dist');

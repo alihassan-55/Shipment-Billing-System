@@ -6,8 +6,7 @@ const globalForPrisma = globalThis;
 if (!process.env.DATABASE_URL) {
   throw new Error(
     'DATABASE_URL environment variable is not set. ' +
-    'Please set it in your environment variables or .env file. ' +
-    'For Fly.io deployment, set it using: flyctl secrets set DATABASE_URL=your_connection_string'
+    'Please set it in your environment variables or .env file.'
   );
 }
 
