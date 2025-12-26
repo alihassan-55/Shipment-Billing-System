@@ -8,7 +8,7 @@ export class LedgerService {
    */
   static async createLedgerEntry(tx, entryData) {
     const { customerId, referenceId, entryType, description, debit, credit } = entryData;
-    
+
     // Get current customer balance
     const customer = await tx.customer.findUnique({
       where: { id: customerId },
@@ -49,5 +49,42 @@ export class LedgerService {
     });
 
     return ledgerEntry;
+  }
+
+  /**
+   * Recalculates the ledger balance for a customer based on all existing ledger entries.
+   * This ensures data consistency after deletions or bulk updates.
+   */
+  static async recalculateCustomerBalance(tx, customerId) {
+    if (!customerId) return;
+
+    // 1. Aggregate all debits and credits
+    const aggregation = await tx.ledgerEntry.aggregate({
+      where: { customerId },
+      _sum: {
+        debit: true,
+        credit: true
+      }
+    });
+
+    const totalDebit = aggregation._sum.debit || 0;
+    const totalCredit = aggregation._sum.credit || 0;
+    // Balance = Total Debit (Invoices) - Total Credit (Payments)
+    // Wait, typical ledger logic:
+    // Debit = Invoice (Customer owes money) -> Increases Balance
+    // Credit = Payment (Customer pays money) -> Decreases Balance
+    // So Balance = Debit - Credit.
+    const newBalance = totalDebit - totalCredit;
+
+    // 2. Update the customer record
+    await tx.customer.update({
+      where: { id: customerId },
+      data: {
+        ledgerBalance: newBalance,
+        updatedAt: new Date()
+      }
+    });
+
+    return newBalance;
   }
 }

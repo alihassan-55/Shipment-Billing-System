@@ -5,6 +5,7 @@
 import { prisma } from '../db/client.js';
 import crypto from 'crypto';
 import { IntegrationService } from '../services/integrationService.js';
+import { LedgerService } from '../services/ledgerService.js';
 
 // Constants
 const VOLUME_DIVISOR = 5000;
@@ -474,13 +475,30 @@ export async function deleteShipment(req, res) {
   try {
     console.log('Deleting shipment:', id);
 
+    // 1. Fetch shipment to get customerId and referenceNumber BEFORE starting transaction
+    const shipment = await prisma.shipments.findUnique({
+      where: { id },
+      select: {
+        customerId: true,
+        referenceNumber: true
+      }
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    const { customerId } = shipment;
+
     // Perform comprehensive hard delete within transaction
     await prisma.$transaction(async (tx) => {
-      // 1. Delete ledger entries created by shipment invoices
+      // 2. Delete ledger entries created by shipment invoices
       const shipmentInvoices = await tx.shipment_invoices.findMany({
         where: { shipmentId: id },
         select: { id: true, postedLedgerEntryId: true }
       });
+
+      const shipmentInvoiceIds = shipmentInvoices.map(inv => inv.id);
 
       for (const invoice of shipmentInvoices) {
         if (invoice.postedLedgerEntryId) {
@@ -495,17 +513,19 @@ export async function deleteShipment(req, res) {
         });
       }
 
-      // 2. Delete shipment invoice line items
-      await tx.shipment_invoice_line_items.deleteMany({
-        where: { shipmentInvoice: { shipmentId: id } }
-      });
+      // 3. Delete shipment invoice line items
+      if (shipmentInvoiceIds.length > 0) {
+        await tx.shipment_invoice_line_items.deleteMany({
+          where: { shipmentInvoiceId: { in: shipmentInvoiceIds } }
+        });
+      }
 
-      // 3. Delete shipment invoices
+      // 4. Delete shipment invoices
       await tx.shipment_invoices.deleteMany({
         where: { shipmentId: id }
       });
 
-      // 4. Delete billing invoices and their related ledger entries
+      // 5. Delete billing invoices and their related ledger entries
       const billingInvoices = await tx.billing_invoices.findMany({
         where: { shipmentId: id },
         select: { id: true }
@@ -521,30 +541,95 @@ export async function deleteShipment(req, res) {
         where: { shipmentId: id }
       });
 
-      // 5. Delete any ledger entries directly referencing the shipment
+      // 6. Delete any ledger entries directly referencing the shipment
       await tx.ledgerEntry.deleteMany({
         where: { referenceId: id }
       });
 
-      // 6. Delete product invoice items
+      // 7. Delete product invoice items
       await tx.product_invoice_items.deleteMany({
         where: { shipmentId: id }
       });
 
-      // 7. Delete shipment boxes
+      // 8. Delete shipment boxes
       await tx.shipment_boxes.deleteMany({
         where: { shipmentId: id }
       });
 
-      // 8. Delete shipment events
+      // 9. Delete shipment events
       await tx.shipmentEvent.deleteMany({
         where: { shipmentId: id }
       });
 
-      // 9. Finally delete the shipment
+      // 10. Finally delete the shipment
       await tx.shipments.delete({
         where: { id }
       });
+
+      // 11. Handle "Ghost" General Invoice Deletion
+      // The system creates a separate Invoice record in the 'Invoice' table that isn't directly linked via relation
+      // We must find it via the Line Item description which contains the Shipment Reference
+      // SAFETY CHECK: Only proceed if we have a valid reference number
+      if (shipment.referenceNumber) {
+        const relatedGeneralInvoices = await tx.invoice.findMany({
+          where: {
+            lineItems: {
+              some: {
+                description: {
+                  contains: shipment.referenceNumber,
+                  mode: 'insensitive' // Ensure we catch it regardless of case
+                }
+              }
+            }
+          },
+          select: { id: true }
+        });
+
+        const generalInvoiceIds = relatedGeneralInvoices.map(inv => inv.id);
+
+        if (generalInvoiceIds.length > 0) {
+          console.log('Found ghost invoices to delete:', generalInvoiceIds);
+
+          // Delete Ledger Entries for these General Invoices
+          await tx.ledgerEntry.deleteMany({
+            where: { referenceId: { in: generalInvoiceIds } }
+          });
+
+          // Delete Line Items
+          await tx.invoiceLineItem.deleteMany({
+            where: { invoiceId: { in: generalInvoiceIds } }
+          });
+
+          // Delete Payments linked to these invoices
+          await tx.payment.deleteMany({
+            where: { invoiceId: { in: generalInvoiceIds } }
+          });
+
+          // Delete the General Invoices themselves
+          await tx.invoice.deleteMany({
+            where: { id: { in: generalInvoiceIds } }
+          });
+        }
+
+        // 12. Cleanup any orphan Ledger Entries that might have been missed
+        // (e.g., if a ledger entry was created with a description but lost its reference link)
+        await tx.ledgerEntry.deleteMany({
+          where: {
+            description: {
+              contains: shipment.referenceNumber,
+              mode: 'insensitive'
+            }
+          }
+        });
+      }
+
+      // 12. RECALCULATE CUSTOMER BALANCE
+      if (customerId) {
+        await LedgerService.recalculateCustomerBalance(tx, customerId);
+      }
+    }, {
+      maxWait: 5000, // default: 2000
+      timeout: 20000 // default: 5000
     });
 
     return res.json({ message: 'Shipment and all related data deleted successfully' });
