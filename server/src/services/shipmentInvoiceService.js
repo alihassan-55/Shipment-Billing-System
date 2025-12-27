@@ -27,8 +27,6 @@ class InvoiceNumberService {
 export class ShipmentInvoiceService {
   /**
    * Create both Declared Value and Billing invoices for a shipment
-   * @param {string} shipmentId - The shipment ID
-   * @returns {Promise<{declaredValueInvoice: Object, billingInvoice: Object}>}
    */
   static async createForShipment(shipmentId, externalTx = null) {
     const dbOperation = async (tx) => {
@@ -351,12 +349,17 @@ export class ShipmentInvoiceService {
    * Regenerate PDF for an invoice
    */
   static async regeneratePDF(invoiceId) {
+    console.log(`[DEBUG] Service attempting to find invoice with ID: '${invoiceId}'`);
     const invoice = await prisma.shipment_invoices.findUnique({
       where: { id: invoiceId }
     });
 
     if (!invoice) {
-      throw new Error('Invoice not found');
+      console.error(`[DEBUG] Invoice NOT FOUND in DB. ID: '${invoiceId}'`);
+      // Log all invoice IDs for debugging (careful with large DBs, but fine for dev)
+      // const allIds = await prisma.shipment_invoices.findMany({ select: { id: true } });
+      // console.log('Available IDs:', allIds.map(i => i.id));
+      throw new Error(`Invoice not found for ID: ${invoiceId}`);
     }
 
     return await this.generateInvoicePDF(invoiceId, invoice.type);

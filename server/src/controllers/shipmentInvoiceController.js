@@ -97,10 +97,26 @@ export async function generateInvoicePDF(req, res) {
     const { id } = req.params;
 
     try {
+        const isRegenerate = req.method === 'POST';
+        console.log(`[DEBUG] generateInvoicePDF called for ID: '${id}' (Type: ${typeof id}, Length: ${id?.length})`);
+        console.log(`[DEBUG] Request Method: ${req.method}, isRegenerate: ${isRegenerate}`);
+
         // Generate PDF (this now uploads to Supabase via S3 and returns the filename)
-        console.log('Generating PDF for invoice:', id);
         const pdfPath = await ShipmentInvoiceService.regeneratePDF(id);
+
+        if (isRegenerate) {
+            // For POST, just return new path/success
+            return res.json({ success: true, pdfUrl: pdfPath });
+        }
+
         console.log('PDF generated/retrieved at:', pdfPath);
+
+        // Fetch invoice details for filename
+        const invoice = await prisma.shipment_invoices.findUnique({
+            where: { id },
+            select: { invoiceNumber: true, type: true }
+        });
+        const filename = invoice ? `${invoice.type}_${invoice.invoiceNumber}.pdf` : `invoice-${id}.pdf`;
 
         // Download from Supabase via S3 Protocol
         const command = new GetObjectCommand({
@@ -126,7 +142,7 @@ export async function generateInvoicePDF(req, res) {
 
         // Set response headers
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="invoice-${id}.pdf"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');

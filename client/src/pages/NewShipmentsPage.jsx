@@ -30,6 +30,7 @@ const ShipmentsPage = () => {
   const [loading, setLoading] = useState(false);
   const [airwayBillUpdated, setAirwayBillUpdated] = useState(false);
   const { toast } = useToast();
+  const [isConfirming, SetisConfirming] = useState(false)
 
   // Load shipments
   const loadShipments = async () => {
@@ -44,7 +45,7 @@ const ShipmentsPage = () => {
       if (statusFilter) params.append('status', statusFilter);
 
       const response = await apiService.getShipments(Object.fromEntries(params));
-      
+
       if (response.success) {
         setShipments(response.data.shipments);
         setPagination(response.data.pagination);
@@ -103,19 +104,19 @@ const ShipmentsPage = () => {
   const handleAirwayBillUpdate = async (shipmentId, airwayBillNumber) => {
     try {
       const response = await apiService.updateShipmentAirwayBill(shipmentId, airwayBillNumber);
-      
+
       if (!response.success) {
         throw new Error(response.error || 'Failed to update airway bill');
       }
-      
+
       toast({
         title: "Success",
         description: "Airway bill updated successfully",
       });
-      
+
       // Set the airway bill as updated to disable the input
       setAirwayBillUpdated(true);
-      
+
       // Reload shipments to show updated data
       loadShipments();
     } catch (error) {
@@ -129,6 +130,8 @@ const ShipmentsPage = () => {
 
   // Handle shipment confirmation
   const handleShipmentConfirmation = async (shipmentId) => {
+    SetisConfirming(true);
+
     try {
       const response = await apiService.confirmShipment(shipmentId);
 
@@ -153,6 +156,8 @@ const ShipmentsPage = () => {
         description: "Failed to confirm shipment",
         variant: "destructive",
       });
+    } finally {
+      SetisConfirming(false)
     }
   };
 
@@ -162,16 +167,16 @@ const ShipmentsPage = () => {
 
     try {
       const response = await apiService.deleteShipment(shipmentId);
-      
+
       if (!response.success) {
         throw new Error('Failed to delete shipment');
       }
-      
+
       toast({
         title: "Success",
         description: "Shipment deleted successfully",
       });
-      
+
       loadShipments();
     } catch (error) {
       toast({
@@ -443,8 +448,9 @@ const ShipmentsPage = () => {
                 <Button
                   onClick={() => handleShipmentConfirmation(selectedShipment.id)}
                   className="bg-green-600 hover:bg-green-700"
+                  disabled={isConfirming}
                 >
-                  Confirm Shipment
+                  {isConfirming ? "Confirming..." : "Confirm Shipment"}
                 </Button>
               )}
             </DialogTitle>
@@ -693,7 +699,7 @@ const ShipmentsPage = () => {
                           <p className="text-lg">{selectedShipment.billing_invoices.totalRate ? formatCurrency(selectedShipment.billing_invoices.totalRate) : 'N/A'}</p>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <label className="text-sm font-medium text-gray-600">E-Form Charges</label>
@@ -729,9 +735,9 @@ const ShipmentsPage = () => {
               )}
 
               {/* Shipment Invoices */}
-              <ShipmentInvoicesPanel 
+              <ShipmentInvoicesPanel
                 key={`${selectedShipment.id}-${selectedShipment.status}`}
-                shipmentId={selectedShipment.id} 
+                shipmentId={selectedShipment.id}
                 shipmentStatus={selectedShipment.status}
               />
 
