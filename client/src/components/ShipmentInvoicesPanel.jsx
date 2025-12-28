@@ -67,7 +67,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
   const regeneratePDF = async (invoice) => {
     const invoiceId = invoice.id;
     try {
-      const response = await apiService.regenerateInvoicePDF(invoiceId);
+      const response = await apiService.regenerateShipmentInvoicePDF(invoiceId);
 
       if (response.success) {
         alert('PDF regenerated successfully');

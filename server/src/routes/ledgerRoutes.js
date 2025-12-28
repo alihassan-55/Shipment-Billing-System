@@ -18,8 +18,8 @@ router.use(requireAuth);
 
 // Ledger management routes
 router.get('/customer/:customerId', getCustomerLedger);
-router.get('/', requireRoles('admin', 'accountant'), getAllLedgerEntries);
-router.post('/', requireRoles('admin', 'accountant'), createLedgerEntry);
-router.get('/summary', requireRoles('admin', 'accountant'), getLedgerSummary);
+router.get('/', requireRoles('ADMIN'), getAllLedgerEntries);
+router.post('/', requireRoles('ADMIN'), createLedgerEntry);
+router.get('/summary', requireRoles('ADMIN'), getLedgerSummary);
 
 export default router;

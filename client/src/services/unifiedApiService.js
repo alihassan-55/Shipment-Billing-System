@@ -204,6 +204,12 @@ class UnifiedApiService {
     });
   }
 
+  async regenerateShipmentInvoicePDF(id) {
+    return this.makeRequest(`/shipment-invoices/invoices/${id}/pdf`, {
+      method: 'POST'
+    });
+  }
+
   async confirmShipment(shipmentId) {
     return this.makeRequest(`/shipment-invoices/shipments/${shipmentId}/confirm`, {
       method: 'PATCH'

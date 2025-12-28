@@ -13,35 +13,39 @@ model User {
   name         String
   email        String      @unique
   passwordHash String
-  role         String
+  role         Role        @default(EMPLOYEE)
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   shipments    shipments[]
 }
 
+enum Role {
+  ADMIN
+  EMPLOYEE
+  USER
+}
+
 model Customer {
-  id             String         @id @default(uuid())
-  name           String
-  company        String?
-  email          String?
-  phone          String?
-  // Shipper-specific fields
-  personName     String?        // For shipper functionality
-  address        String?        // For shipper functionality
-  city           String?        // For shipper functionality
-  country        String?        @default("Pakistan") // For shipper functionality
-  cnic           String?        // For shipper functionality
-  ntn            String?        // For shipper functionality
-  // Financial tracking fields
-  ledgerBalance  Float          @default(0)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @default(now()) @updatedAt // Added default value
-  addresses      Address[]
-  invoices       Invoice[]
-  payments        Payment[]
-  ledgerEntries  LedgerEntry[]
-  shipments       shipments[]    // As shipper
+  id            String        @id @default(uuid())
+  name          String
+  company       String?
+  email         String?
+  phone         String?
+  createdAt     DateTime      @default(now())
+  address       String?
+  city          String?
+  cnic          String?
+  country       String?       @default("Pakistan")
+  ntn           String?
+  personName    String?
+  updatedAt     DateTime      @default(now()) @updatedAt
+  ledgerBalance Float         @default(0)
+  addresses     Address[]
+  invoices      Invoice[]
+  ledgerEntries LedgerEntry[]
+  payments      Payment[]
+  shipments     shipments[]
 }
 
 model Address {
@@ -77,13 +81,13 @@ model Invoice {
   subtotal      Float
   tax           Float
   total         Float
+  currency      String            @default("Rs")
+  pdfPath       String?
   amountPaid    Float             @default(0)
   balanceDue    Float             @default(0)
-  currency      String            @default("Rs")
-  status        InvoiceStatus     @default(DRAFT)
-  pdfPath       String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
+  status        InvoiceStatus     @default(DRAFT)
   customer      Customer          @relation(fields: [customerId], references: [id])
   lineItems     InvoiceLineItem[]
   payments      Payment[]
@@ -102,16 +106,16 @@ model InvoiceLineItem {
 model Payment {
   id          String       @id @default(uuid())
   invoiceId   String
-  customerId  String?
   amount      Float
-  paymentType PaymentType? @default(CASH)
-  notes       String?
   reference   String?
   receivedBy  String?
   createdAt   DateTime     @default(now())
+  customerId  String?
+  notes       String?
+  paymentType PaymentType? @default(CASH)
   updatedAt   DateTime     @updatedAt
-  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
   customer    Customer?    @relation(fields: [customerId], references: [id])
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
 }
 
 model AuditLog {
@@ -135,10 +139,10 @@ model billing_invoices {
   boxCharges        Float     @default(0)
   grandTotal        Float
   paymentMethod     String
-  cashAmount        Float     @default(0)
   customerAccountId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime
+  cashAmount        Float     @default(0)
   shipments         shipments @relation(fields: [shipmentId], references: [id])
 }
 
@@ -156,17 +160,17 @@ model consignees {
 }
 
 model LedgerEntry {
-  id            String        @id @default(uuid())
-  customerId    String
-  referenceId   String?        // Invoice ID or Payment ID
-  entryType     LedgerEntryType
-  description   String
-  debit         Float         @default(0)
-  credit        Float         @default(0)
-  balanceAfter  Float?        // Make optional initially
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  customer      Customer      @relation(fields: [customerId], references: [id])
+  id           String          @id @default(uuid())
+  customerId   String
+  referenceId  String?
+  entryType    LedgerEntryType
+  description  String
+  debit        Float           @default(0)
+  credit       Float           @default(0)
+  balanceAfter Float?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  customer     Customer        @relation(fields: [customerId], references: [id])
 }
 
 model product_invoice_items {
@@ -207,7 +211,6 @@ model shipments {
   referenceNumber       String                  @unique
   airwayBillNumber      String?
   serviceProviderId     String
-  customerId            String?                 // Made optional initially for migration
   consigneeId           String
   terms                 String
   actualWeightKg        Float
@@ -220,46 +223,47 @@ model shipments {
   deliveredAt           DateTime?
   createdById           String
   updatedAt             DateTime
+  customerId            String?
   events                ShipmentEvent[]
   billing_invoices      billing_invoices?
   product_invoice_items product_invoice_items[]
   shipment_boxes        shipment_boxes[]
-  shipment_invoices      shipment_invoices[]
+  shipment_invoices     shipment_invoices[]
   consignees            consignees              @relation(fields: [consigneeId], references: [id])
   User                  User                    @relation(fields: [createdById], references: [id])
-  service_providers     service_providers       @relation(fields: [serviceProviderId], references: [id])
   Customer              Customer?               @relation(fields: [customerId], references: [id])
+  service_providers     service_providers       @relation(fields: [serviceProviderId], references: [id])
 }
 
 model shipment_invoices {
-  id                String                      @id @default(uuid())
-  invoiceNumber     String                      @unique
-  type              InvoiceType
-  shipmentId        String
-  customerAccountId String?
-  subtotal          Float
-  tax               Float                       @default(0)
-  total             Float
-  currency          String                      @default("Rs")
-  status            InvoiceStatus               @default(DRAFT)
+  id                  String                        @id @default(uuid())
+  invoiceNumber       String                        @unique
+  type                InvoiceType
+  shipmentId          String
+  customerAccountId   String?
+  subtotal            Float
+  tax                 Float                         @default(0)
+  total               Float
+  currency            String                        @default("Rs")
+  status              InvoiceStatus                 @default(DRAFT)
   postedLedgerEntryId String?
-  issuedAt          DateTime                    @default(now())
-  pdfUrl            String?
-  createdAt         DateTime                    @default(now())
-  updatedAt         DateTime                    @updatedAt
-  shipments         shipments                   @relation(fields: [shipmentId], references: [id])
-  lineItems         shipment_invoice_line_items[]
+  issuedAt            DateTime                      @default(now())
+  pdfUrl              String?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  lineItems           shipment_invoice_line_items[]
+  shipments           shipments                     @relation(fields: [shipmentId], references: [id])
 }
 
 model shipment_invoice_line_items {
-  id                String              @id @default(uuid())
+  id                String            @id @default(uuid())
   shipmentInvoiceId String
   description       String
   quantity          Int?
   unitPrice         Float?
   total             Float
-  createdAt         DateTime            @default(now())
-  shipment_invoices shipment_invoices   @relation(fields: [shipmentInvoiceId], references: [id])
+  createdAt         DateTime          @default(now())
+  shipment_invoices shipment_invoices @relation(fields: [shipmentInvoiceId], references: [id])
 }
 
 enum InvoiceType {
@@ -289,4 +293,3 @@ enum LedgerEntryType {
   ADJUSTMENT
   REFUND
 }
-
