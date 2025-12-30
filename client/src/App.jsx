@@ -16,20 +16,33 @@ import ReportsPage from './pages/ReportsPage'
 import BulkImportPage from './pages/BulkImportPage'
 import Layout from './components/Layout'
 
+// Protected Route Component
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user } = useAuthStore()
+
+  if (!user) return <Navigate to="/login" replace />
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return children
+}
+
 function App() {
-  const { token } = useAuthStore()
+  const { token, user } = useAuthStore()
 
   return (
     <ErrorBoundary>
       <Router>
         <div className="min-h-screen bg-gray-50">
           <Routes>
-            <Route 
-              path="/login" 
-              element={token ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
+            <Route
+              path="/login"
+              element={token ? <Navigate to="/dashboard" replace /> : <LoginPage />}
             />
-            <Route 
-              path="/*" 
+            <Route
+              path="/*"
               element={
                 token ? (
                   <Layout>
@@ -38,8 +51,25 @@ function App() {
                       <Route path="/customers" element={<CustomersPage />} />
                       <Route path="/shipments" element={<NewShipmentsPage />} />
                       <Route path="/invoices" element={<InvoicesPage />} />
-                      <Route path="/payments" element={<PaymentsPage />} />
-                      <Route path="/ledger" element={<LedgerPage />} />
+
+                      {/* Protected Routes */}
+                      <Route
+                        path="/payments"
+                        element={
+                          <ProtectedRoute allowedRoles={['ADMIN']}>
+                            <PaymentsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/ledger"
+                        element={
+                          <ProtectedRoute allowedRoles={['ADMIN']}>
+                            <LedgerPage />
+                          </ProtectedRoute>
+                        }
+                      />
+
                       <Route path="/reports" element={<ReportsPage />} />
                       <Route path="/bulk-import" element={<BulkImportPage />} />
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -48,7 +78,7 @@ function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
           </Routes>
           <Toaster />

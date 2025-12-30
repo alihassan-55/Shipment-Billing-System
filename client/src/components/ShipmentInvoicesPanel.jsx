@@ -64,9 +64,10 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     }
   };
 
-  const regeneratePDF = async (invoiceId) => {
+  const regeneratePDF = async (invoice) => {
+    const invoiceId = invoice.id;
     try {
-      const response = await apiService.regenerateInvoicePDF(invoiceId);
+      const response = await apiService.regenerateShipmentInvoicePDF(invoiceId);
 
       if (response.success) {
         alert('PDF regenerated successfully');
@@ -80,7 +81,9 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
     }
   };
 
-  const handlePdfAction = async (pdfUrl, action = 'view') => {
+  const handlePdfAction = async (invoice, action = 'view') => {
+    const { pdfUrl, type, invoiceNumber } = invoice;
+
     if (!pdfUrl) {
       alert('PDF not available yet. Please regenerate PDF.');
       return;
@@ -95,8 +98,8 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
       } else {
         const link = document.createElement('a');
         link.href = url;
-        // Try to derive filename from url or sensitive default
-        const fileName = pdfUrl.split('/').pop() || 'invoice.pdf';
+        // Generate descriptive filename: e.g. "BILLING_INV-2024-001.pdf"
+        const fileName = `${type}_${invoiceNumber}.pdf`;
         link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
@@ -217,7 +220,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handlePdfAction(invoice.pdfUrl, 'view')}
+                    onClick={() => handlePdfAction(invoice, 'view')}
                     disabled={!invoice.pdfUrl}
                   >
                     <Eye className="h-4 w-4 mr-2" />
@@ -226,7 +229,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handlePdfAction(invoice.pdfUrl, 'download')}
+                    onClick={() => handlePdfAction(invoice, 'download')}
                     disabled={!invoice.pdfUrl}
                   >
                     <Download className="h-4 w-4 mr-2" />
@@ -235,7 +238,7 @@ const ShipmentInvoicesPanel = ({ shipmentId, shipmentStatus }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => regeneratePDF(invoice.id)}
+                    onClick={() => regeneratePDF(invoice)}
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Regenerate PDF

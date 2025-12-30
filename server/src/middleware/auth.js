@@ -16,6 +16,7 @@ export function requireAuth(req, res, next) {
 export function requireRoles(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    // roles should be passed as 'ADMIN', 'EMPLOYEE', etc.
     if (!roles.includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
     return next();
   };
