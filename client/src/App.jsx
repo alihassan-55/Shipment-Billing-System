@@ -14,6 +14,7 @@ import PaymentsPage from './pages/PaymentsPage'
 import LedgerPage from './pages/LedgerPage'
 import ReportsPage from './pages/ReportsPage'
 import BulkImportPage from './pages/BulkImportPage'
+import ProfilePage from './pages/ProfilePage'
 import Layout from './components/Layout'
 
 // Protected Route Component
@@ -51,6 +52,7 @@ function App() {
                       <Route path="/customers" element={<CustomersPage />} />
                       <Route path="/shipments" element={<NewShipmentsPage />} />
                       <Route path="/invoices" element={<InvoicesPage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
 
                       {/* Protected Routes */}
                       <Route

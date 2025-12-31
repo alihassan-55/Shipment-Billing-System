@@ -1,13 +1,14 @@
 import React, { useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { useDataStore } from "../stores/dataStore"
 import { formatCurrency } from "../lib/utils"
 import LedgerComponent from "../components/LedgerComponent"
-import { 
-  Package, 
-  FileText, 
-  DollarSign, 
+import {
+  Package,
+  FileText,
+  DollarSign,
   Clock,
   TrendingUp,
   Users,
@@ -16,6 +17,7 @@ import {
 
 const DashboardPage = () => {
   const { dashboardStats, fetchDashboardStats } = useDataStore()
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchDashboardStats()
@@ -104,7 +106,7 @@ const DashboardPage = () => {
                 </div>
                 <Badge variant="outline">Pending</Badge>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-green-50 rounded-lg">
@@ -133,25 +135,37 @@ const DashboardPage = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              <button className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left">
+              <button
+                onClick={() => navigate('/shipments')}
+                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
                 <Package className="h-6 w-6 text-blue-600 mb-2" />
                 <p className="font-medium">Create Shipment</p>
                 <p className="text-sm text-gray-500">Add new shipment</p>
               </button>
-              
-              <button className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left">
+
+              <button
+                onClick={() => navigate('/invoices')}
+                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
                 <FileText className="h-6 w-6 text-green-600 mb-2" />
                 <p className="font-medium">Generate Invoice</p>
                 <p className="text-sm text-gray-500">Create invoice</p>
               </button>
-              
-              <button className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left">
+
+              <button
+                onClick={() => navigate('/customers')}
+                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
                 <Users className="h-6 w-6 text-purple-600 mb-2" />
                 <p className="font-medium">Add Customer</p>
                 <p className="text-sm text-gray-500">New customer</p>
               </button>
-              
-              <button className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left">
+
+              <button
+                onClick={() => navigate('/reports')}
+                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
                 <TrendingUp className="h-6 w-6 text-orange-600 mb-2" />
                 <p className="font-medium">View Reports</p>
                 <p className="text-sm text-gray-500">Analytics</p>
@@ -168,4 +182,3 @@ const DashboardPage = () => {
 }
 
 export default DashboardPage
-

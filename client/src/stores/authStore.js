@@ -62,6 +62,22 @@ const useAuthStore = create(
             error: error.response?.data?.error || 'Failed to create user'
           }
         }
+      },
+
+      updateProfile: async (data) => {
+        set({ isLoading: true })
+        try {
+          const response = await axios.put('/auth/profile', data)
+          const updatedUser = response.data
+          set({ user: updatedUser, isLoading: false })
+          return { success: true, data: updatedUser }
+        } catch (error) {
+          set({ isLoading: false })
+          return {
+            success: false,
+            error: error.response?.data?.error || 'Failed to update profile'
+          }
+        }
       }
     }),
     {

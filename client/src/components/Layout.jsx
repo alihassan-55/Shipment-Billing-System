@@ -53,8 +53,8 @@ const Sidebar = () => {
               key={item.name}
               to={item.href}
               className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${isActive
-                  ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
+                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                 }`}
             >
               <item.icon className="mr-3 h-5 w-5" />
@@ -65,7 +65,7 @@ const Sidebar = () => {
       </nav>
 
       <div className="border-t p-4">
-        <div className="flex items-center space-x-3 mb-3">
+        <Link to="/profile" className="flex items-center space-x-3 mb-3 hover:bg-gray-50 p-2 rounded-md transition-colors">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
             <User className="h-4 w-4 text-blue-600" />
           </div>
@@ -77,7 +77,7 @@ const Sidebar = () => {
               {user?.role || "Role"}
             </p>
           </div>
-        </div>
+        </Link>
         <Button
           variant="outline"
           size="sm"
