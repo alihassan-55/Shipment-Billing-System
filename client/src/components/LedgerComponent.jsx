@@ -8,24 +8,30 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useDataStore } from '../stores/dataStore';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Filter, Download } from 'lucide-react';
+import { Filter, Download, ArrowUpDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import AddPaymentModal from './modals/AddPaymentModal';
 
 const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
-  const { 
-    ledgerEntries, 
-    ledgerLoading, 
+  const {
+    ledgerEntries,
+    ledgerLoading,
     ledgerCustomer,
-    fetchLedgerEntries, 
+    ledgerPagination,
+    ledgerSummary,
+    fetchLedgerEntries,
     customers,
-    fetchCustomers 
+    fetchCustomers
   } = useDataStore();
-  
+
   const [selectedCustomer, setSelectedCustomer] = useState(customerId || 'all');
   const [selectedCustomerLabel, setSelectedCustomerLabel] = useState('All customers');
   const [filterType, setFilterType] = useState('ALL');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [customerQuery, setCustomerQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
   const customersFetchedRef = useRef(false);
 
   // Debounced fetch customers on query change
@@ -44,35 +50,87 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
       fetchCustomers();
       customersFetchedRef.current = true;
     }
-    fetchLedgerEntries(selectedCustomer === 'all' ? null : selectedCustomer);
-  }, [selectedCustomer, fetchLedgerEntries, fetchCustomers, showCustomerFilter]);
 
-  const calculateSummary = () => {
-    const totalDebits = ledgerEntries
-      .filter(entry => entry.entryType === 'INVOICE')
-      .reduce((sum, entry) => sum + (entry.debit || 0), 0);
-    const totalCredits = ledgerEntries
-      .filter(entry => entry.entryType === 'PAYMENT')
-      .reduce((sum, entry) => sum + (entry.credit || 0), 0);
-    const balanceDue = totalDebits - totalCredits;
-    return { totalDebits, totalCredits, balanceDue };
-  };
+    // Build params for fetch
+    const params = {
+      page: currentPage,
+      limit: 20,
+      sortBy,
+      sortOrder
+    };
 
-  const summary = calculateSummary();
+    if (filterType !== 'ALL') params.entryType = filterType;
+    if (dateFrom) params.from = dateFrom;
+    if (dateTo) params.to = dateTo;
 
-  const filteredEntries = ledgerEntries.filter(entry => {
-    if (filterType !== 'ALL' && entry.entryType !== filterType) return false;
-    if (dateFrom && new Date(entry.createdAt) < new Date(dateFrom)) return false;
-    if (dateTo && new Date(entry.createdAt) > new Date(dateTo)) return false;
-    return true;
-  });
+    fetchLedgerEntries(selectedCustomer === 'all' ? null : selectedCustomer, params);
+  }, [selectedCustomer, fetchLedgerEntries, fetchCustomers, showCustomerFilter, currentPage, filterType, dateFrom, dateTo, sortBy, sortOrder]);
+
+  // No need for calculating summary locally anymore, use server provided summary
+  const summary = ledgerSummary || { totalDebits: 0, totalCredits: 0, balanceDue: 0 };
+
+  // No need for client-side filtering as we do it server-side now, 
+  // but keeping 'filteredEntries' name for compatibility for now to minimize diff, 
+  // though it's actually just 'ledgerEntries' from store which are already filtered by server.
+  const filteredEntries = ledgerEntries;
+
+  // Need to handle null entries case
+  const hasEntries = filteredEntries && filteredEntries.length > 0;
 
   const getEntryTypeBadge = (type) => {
     const variants = { INVOICE: 'destructive', PAYMENT: 'secondary', ADJUSTMENT: 'outline', REFUND: 'outline' };
     return <Badge variant={variants[type] || 'outline'}>{type}</Badge>;
   };
 
-  const handleExport = () => { console.log('Export ledger entries'); };
+  const handleExport = () => {
+    if (!filteredEntries.length) {
+      return;
+    }
+
+    // Create CSV content
+    const headers = ['Date', 'Type', 'Description', 'Debit', 'Credit', 'Balance After'];
+    const rows = filteredEntries.map(entry => [
+      formatDate(entry.createdAt),
+      entry.entryType,
+      `"${entry.description.replace(/"/g, '""')}"`, // Escape quotes
+      entry.debit || 0,
+      entry.credit || 0,
+      entry.balanceAfter
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `ledger_export_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= (ledgerPagination?.pages || 1)) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('desc'); // Default to desc for new column
+    }
+  };
 
   const filteredCustomers = (customers || []).filter(c => {
     if (!customerQuery) return true;
@@ -88,47 +146,56 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Invoices</CardTitle>
-            <CardDescription>Sum of invoice debits</CardDescription>
-          </CardHeader>
-          <CardContent className="text-xl font-semibold">{formatCurrency(summary.totalDebits || 0)}</CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Total Payments</CardTitle>
-            <CardDescription>Sum of credits</CardDescription>
           </CardHeader>
-          <CardContent className="text-xl font-semibold">{formatCurrency(summary.totalCredits || 0)}</CardContent>
+          <CardContent className="text-xl font-semibold">{formatCurrency(summary.totalCredit || 0)}</CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Balance Due</CardTitle>
-            <CardDescription>Invoices minus payments</CardDescription>
           </CardHeader>
           <CardContent className="text-xl font-semibold">{formatCurrency(summary.balanceDue || 0)}</CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Customer Ledger Balance</CardTitle>
-            <CardDescription>From server</CardDescription>
           </CardHeader>
-          <CardContent className="text-xl font-semibold">{formatCurrency(ledgerCustomer?.ledgerBalance || 0)}</CardContent>
+          <CardContent className="text-xl font-semibold">{selectedCustomer === 'all' ? formatCurrency(summary.balanceDue || 0) : formatCurrency(ledgerCustomer?.ledgerBalance || 0)}</CardContent>
         </Card>
       </div>
-      <div className="flex justify-between items-center">
+
+
+      {/* Customer Header Box */}
+      <div className="bg-white p-6 rounded-lg border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Customer Ledger</h2>
-          <p className="text-gray-600">
-            {selectedCustomer && selectedCustomer !== 'all' ? selectedCustomerLabel : 'All ledger entries'}
+          <h2 className="text-3xl font-bold text-gray-900">
+            {selectedCustomer && selectedCustomer !== 'all' ? selectedCustomerLabel : 'All Customers'}
+          </h2>
+          <p className="text-gray-500 mt-1">
+            {selectedCustomer && selectedCustomer !== 'all' ? 'Ledger for selected customer' : 'Consolidated ledger for all customers'}
           </p>
         </div>
         <div className="flex space-x-2">
+          <AddPaymentModal
+            customerId={selectedCustomer === 'all' ? null : selectedCustomer}
+            customerName={selectedCustomer === 'all' ? null : selectedCustomerLabel}
+            onSuccess={() => {
+              // Refresh ledger
+              fetchLedgerEntries(selectedCustomer === 'all' ? null : selectedCustomer, {
+                page: currentPage,
+                limit: 20,
+                ...(filterType !== 'ALL' && { entryType: filterType }),
+                ...(dateFrom && { from: dateFrom }),
+                ...(dateTo && { to: dateTo })
+              });
+            }}
+          />
           <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            Export CSV
           </Button>
         </div>
       </div>
@@ -214,11 +281,26 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort('createdAt')}>
+                      <div className="flex items-center">
+                        Date
+                        {sortBy === 'createdAt' && <ArrowUpDown className="ml-2 h-4 w-4" />}
+                      </div>
+                    </TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Debit</TableHead>
-                    <TableHead>Credit</TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort('debit')}>
+                      <div className="flex items-center">
+                        Debit
+                        {sortBy === 'debit' && <ArrowUpDown className="ml-2 h-4 w-4" />}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort('credit')}>
+                      <div className="flex items-center">
+                        Credit
+                        {sortBy === 'credit' && <ArrowUpDown className="ml-2 h-4 w-4" />}
+                      </div>
+                    </TableHead>
                     <TableHead>Balance After</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -237,9 +319,36 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
               </Table>
             </div>
           )}
+
+          {/* Pagination Controls */}
+          {ledgerPagination && ledgerPagination.pages > 1 && (
+            <div className="flex items-center justify-end space-x-2 py-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <div className="text-sm text-gray-600">
+                Page {currentPage} of {ledgerPagination.pages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === ledgerPagination.pages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 };
 

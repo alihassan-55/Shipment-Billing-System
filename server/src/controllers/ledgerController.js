@@ -37,12 +37,12 @@ export async function getCustomerLedger(req, res) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Get ledger entries
-    const [entries, total] = await Promise.all([
+    const [entries, total, totals] = await Promise.all([
       prisma.ledgerEntry.findMany({
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [req.query.sortBy || 'createdAt']: req.query.sortOrder || 'desc' },
         include: {
           customer: {
             select: {
@@ -53,8 +53,19 @@ export async function getCustomerLedger(req, res) {
           }
         }
       }),
-      prisma.ledgerEntry.count({ where })
+      prisma.ledgerEntry.count({ where }),
+      prisma.ledgerEntry.aggregate({
+        where,
+        _sum: {
+          debit: true,
+          credit: true
+        }
+      })
     ]);
+
+    const totalDebit = totals._sum.debit || 0;
+    const totalCredit = totals._sum.credit || 0;
+    const balanceDue = totalDebit - totalCredit;
 
     return res.json({
       customer: {
@@ -69,6 +80,11 @@ export async function getCustomerLedger(req, res) {
         limit: parseInt(limit),
         total,
         pages: Math.ceil(total / parseInt(limit))
+      },
+      summary: {
+        totalDebit,
+        totalCredit,
+        balanceDue
       }
     });
   } catch (error) {
@@ -95,12 +111,12 @@ export async function getAllLedgerEntries(req, res) {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const [entries, total] = await Promise.all([
+    const [entries, total, totals] = await Promise.all([
       prisma.ledgerEntry.findMany({
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [req.query.sortBy || 'createdAt']: req.query.sortOrder || 'desc' },
         include: {
           customer: {
             select: {
@@ -111,8 +127,19 @@ export async function getAllLedgerEntries(req, res) {
           }
         }
       }),
-      prisma.ledgerEntry.count({ where })
+      prisma.ledgerEntry.count({ where }),
+      prisma.ledgerEntry.aggregate({
+        where,
+        _sum: {
+          debit: true,
+          credit: true
+        }
+      })
     ]);
+
+    const totalDebit = totals._sum.debit || 0;
+    const totalCredit = totals._sum.credit || 0;
+    const balanceDue = totalDebit - totalCredit;
 
     return res.json({
       entries,
@@ -121,6 +148,11 @@ export async function getAllLedgerEntries(req, res) {
         limit: parseInt(limit),
         total,
         pages: Math.ceil(total / parseInt(limit))
+      },
+      summary: {
+        totalDebit,
+        totalCredit,
+        balanceDue
       }
     });
   } catch (error) {
@@ -136,14 +168,14 @@ export async function createLedgerEntry(req, res) {
   const { customerId, entryType, description, debit, credit, notes } = req.body;
 
   if (!customerId || !entryType || !description) {
-    return res.status(400).json({ 
-      error: 'Customer ID, entry type, and description are required' 
+    return res.status(400).json({
+      error: 'Customer ID, entry type, and description are required'
     });
   }
 
   if ((debit || 0) === 0 && (credit || 0) === 0) {
-    return res.status(400).json({ 
-      error: 'Either debit or credit amount must be provided' 
+    return res.status(400).json({
+      error: 'Either debit or credit amount must be provided'
     });
   }
 

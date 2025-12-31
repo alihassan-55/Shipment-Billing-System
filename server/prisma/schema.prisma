@@ -105,7 +105,7 @@ model InvoiceLineItem {
 
 model Payment {
   id          String       @id @default(uuid())
-  invoiceId   String
+  invoiceId   String?
   amount      Float
   reference   String?
   receivedBy  String?
@@ -115,7 +115,7 @@ model Payment {
   paymentType PaymentType? @default(CASH)
   updatedAt   DateTime     @updatedAt
   customer    Customer?    @relation(fields: [customerId], references: [id])
-  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
+  invoice     Invoice?     @relation(fields: [invoiceId], references: [id])
 }
 
 model AuditLog {

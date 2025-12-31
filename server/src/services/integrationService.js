@@ -186,16 +186,18 @@ export class IntegrationService {
       const payment = await tx.payment.create({
         data: {
           id: crypto.randomUUID(),
-          customerId,
           amount: parseFloat(amount),
-          paymentMethod,
-          paymentDate: new Date(paymentDate),
-          invoiceId: invoiceId || null,
-          shipmentId: shipmentId || null,
+          paymentType: paymentMethod,
           notes: notes || '',
-          receiptNumber: receiptNumber || `PAY-${Date.now()}`,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          reference: receiptNumber || `PAY-${Date.now()}`,
+          createdAt: new Date(paymentDate), // Use provided date as creation date
+          updatedAt: new Date(),
+          customer: {
+            connect: { id: customerId }
+          },
+          invoice: invoiceId ? {
+            connect: { id: invoiceId }
+          } : undefined
         }
       });
 
@@ -204,7 +206,7 @@ export class IntegrationService {
         customerId,
         referenceId: payment.id,
         entryType: LEDGER_ENTRY_TYPES.PAYMENT,
-        description: REFERENCE_FORMATS.PAYMENT(payment.receiptNumber),
+        description: REFERENCE_FORMATS.PAYMENT(payment.reference),
         debit: 0,
         credit: parseFloat(amount)
       });
