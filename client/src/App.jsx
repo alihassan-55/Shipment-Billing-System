@@ -15,6 +15,7 @@ import LedgerPage from './pages/LedgerPage'
 import ReportsPage from './pages/ReportsPage'
 import BulkImportPage from './pages/BulkImportPage'
 import ProfilePage from './pages/ProfilePage'
+import EmployeesPage from './pages/EmployeesPage'
 import Layout from './components/Layout'
 
 // Protected Route Component
@@ -68,6 +69,14 @@ function App() {
                         element={
                           <ProtectedRoute allowedRoles={['ADMIN']}>
                             <LedgerPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/employees"
+                        element={
+                          <ProtectedRoute allowedRoles={['ADMIN']}>
+                            <EmployeesPage />
                           </ProtectedRoute>
                         }
                       />

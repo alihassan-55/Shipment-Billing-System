@@ -12,22 +12,18 @@ axios.defaults.baseURL = API_BASE_URL
 const useAuthStore = create(
   persist(
     (set, get) => ({
-      token: null,
       user: null,
+      token: localStorage.getItem('token'),
       isLoading: false,
+      employees: [], // Terminology: employees = all users (managed by admin)
 
       login: async (email, password) => {
         set({ isLoading: true })
         try {
           const response = await axios.post('/auth/login', { email, password })
-          const { token } = response.data
-          set({ token, isLoading: false })
-
-          // Update axios headers
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-
-          // Get user info
-          await get().getCurrentUser()
+          const { token, user } = response.data
+          localStorage.setItem('token', token)
+          set({ token, user, isLoading: false })
           return { success: true }
         } catch (error) {
           set({ isLoading: false })
@@ -39,16 +35,76 @@ const useAuthStore = create(
       },
 
       logout: () => {
+        localStorage.removeItem('token')
         set({ token: null, user: null })
-        axios.defaults.headers.common['Authorization'] = ''
       },
 
-      getCurrentUser: async () => {
+      fetchEmployees: async () => {
+        set({ isLoading: true })
         try {
-          const response = await axios.get('/users/me')
-          set({ user: response.data })
+          const response = await axios.get('/users')
+          set({ employees: response.data, isLoading: false })
+          return { success: true, data: response.data }
         } catch (error) {
-          console.error('Failed to get current user:', error)
+          set({ isLoading: false })
+          return { success: false, error: error.message }
+        }
+      },
+
+      // Used for admin creating any user (employee)
+      createEmployee: async (userData) => {
+        set({ isLoading: true })
+        try {
+          const response = await axios.post('/users', userData)
+          const newEmp = response.data
+          set(state => ({
+            employees: [...state.employees, newEmp],
+            isLoading: false
+          }))
+          return { success: true, data: newEmp }
+        } catch (error) {
+          set({ isLoading: false })
+          return {
+            success: false,
+            error: error.response?.data?.error || 'Failed to create user'
+          }
+        }
+      },
+
+      updateEmployee: async (id, data) => {
+        set({ isLoading: true })
+        try {
+          const response = await axios.put(`/users/${id}`, data)
+          const updatedEmp = response.data
+          set(state => ({
+            employees: state.employees.map(e => e.id === id ? updatedEmp : e),
+            isLoading: false
+          }))
+          return { success: true, data: updatedEmp }
+        } catch (error) {
+          set({ isLoading: false })
+          return {
+            success: false,
+            error: error.response?.data?.error || 'Failed to update user'
+          }
+        }
+      },
+
+      deleteEmployee: async (id) => {
+        set({ isLoading: true })
+        try {
+          await axios.delete(`/users/${id}`)
+          set(state => ({
+            employees: state.employees.filter(e => e.id !== id),
+            isLoading: false
+          }))
+          return { success: true }
+        } catch (error) {
+          set({ isLoading: false })
+          return {
+            success: false,
+            error: error.response?.data?.error || 'Failed to delete user'
+          }
         }
       },
 

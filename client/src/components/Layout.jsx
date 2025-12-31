@@ -10,7 +10,8 @@ import {
   BarChart3,
   Upload,
   LogOut,
-  User
+  User,
+  UserCog
 } from "lucide-react"
 import { useAuthStore } from "../stores/authStore"
 import { Button } from "./ui/button"
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Invoices", href: "/invoices", icon: FileText },
   { name: "Payments", href: "/payments", icon: CreditCard },
   { name: "Ledger", href: "/ledger", icon: Calculator },
+  { name: "Employees", href: "/employees", icon: UserCog },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Bulk Import", href: "/bulk-import", icon: Upload },
 ]
@@ -33,7 +35,7 @@ const Sidebar = () => {
 
   // Filter navigation based on role
   const filteredNavigation = navigation.filter(item => {
-    if (item.name === "Payments" || item.name === "Ledger") {
+    if (["Payments", "Ledger", "Employees"].includes(item.name)) {
       return user?.role === "ADMIN";
     }
     return true;

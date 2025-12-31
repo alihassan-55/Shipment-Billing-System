@@ -54,30 +54,39 @@ export async function register(req, res) {
 
 export async function login(req, res) {
   const { email, password } = req.body || {};
-  
+
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
   }
-  
+
   const user = await prisma.user.findUnique({ where: { email } });
-  
+
   if (!user || !user.isActive) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  
+
   const ok = await bcrypt.compare(password, user.passwordHash);
-  
+
   if (!ok) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  
+
   const token = jwt.sign(
     { sub: user.id, role: user.role, email: user.email, name: user.name },
     process.env.JWT_SECRET,
     { expiresIn: '1d' }
   );
-  
-  return res.json({ token });
+
+  return res.json({
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive
+    }
+  });
 }
 
 export async function logout(_req, res) {
@@ -111,7 +120,7 @@ export async function getProfile(req, res) {
 
 export async function updateProfile(req, res) {
   const userId = req.user.sub;
-  
+
   const parse = updateProfileSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: 'Invalid input', details: parse.error.errors });
@@ -130,7 +139,7 @@ export async function updateProfile(req, res) {
     if (!currentPassword) {
       return res.status(400).json({ error: 'Current password required to change password' });
     }
-    
+
     const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!validPassword) {
       return res.status(400).json({ error: 'Current password is incorrect' });
