@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import companyRoutes from './routes/companyRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import invoiceRoutes from './routes/invoiceRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
@@ -95,6 +96,7 @@ export function createApp() {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/company', companyRoutes);
   app.use('/api/customers', customerRoutes);
   app.use('/api/shipments', newShipmentRoutes);
   app.use('/api/invoices', invoiceRoutes);
