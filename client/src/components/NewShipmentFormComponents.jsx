@@ -7,13 +7,13 @@ import { Separator } from './ui/separator';
 import { Checkbox } from './ui/checkbox';
 import { Plus, X, Package, Calculator, User } from 'lucide-react';
 
-const TypeaheadInput = ({ 
-  label, 
-  value, 
-  onChange, 
-  onSelect, 
+const TypeaheadInput = ({
+  label,
+  value,
+  onChange,
+  onSelect,
   onCreateNew,
-  suggestions = [], 
+  suggestions = [],
   placeholder = "Type to search...",
   required = false,
   disabled = false,
@@ -30,8 +30,8 @@ const TypeaheadInput = ({
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
-          inputRef.current && !inputRef.current.contains(event.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target) &&
+        inputRef.current && !inputRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
@@ -73,7 +73,7 @@ const TypeaheadInput = ({
         className="w-full"
       />
       {isOpen && (filteredSuggestions.length > 0 || (showCreateNew && inputValue.length >= 2)) && (
-        <div 
+        <div
           ref={dropdownRef}
           className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
         >
@@ -89,7 +89,7 @@ const TypeaheadInput = ({
               </div>
             </div>
           ))}
-          
+
           {showCreateNew && inputValue.length >= 2 && filteredSuggestions.length === 0 && (
             <div
               className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-t border-gray-200 bg-blue-50"
@@ -115,7 +115,9 @@ const TypeaheadInput = ({
 const BoxDimensions = ({ boxes, onBoxesChange, onDimensionsChange }) => {
   const updateBoxDimensions = (index, field, value) => {
     const newBoxes = [...boxes];
-    newBoxes[index] = { ...newBoxes[index], [field]: parseFloat(value) || 0 };
+    // Use parseInt for dimensions (whole numbers), parseFloat for weight
+    const numericValue = field === 'actualWeightKg' ? (parseFloat(value) || 0) : (parseInt(value) || 0);
+    newBoxes[index] = { ...newBoxes[index], [field]: numericValue };
     onDimensionsChange(newBoxes);
   };
 
@@ -132,10 +134,10 @@ const BoxDimensions = ({ boxes, onBoxesChange, onDimensionsChange }) => {
           Total Boxes: {boxes.length}
         </div>
       </div>
-      
+
       {boxes.map((box, index) => {
         const volumetricWeight = calculateVolumetricWeight(box.lengthCm, box.widthCm, box.heightCm);
-        
+
         return (
           <Card key={index} className="p-4">
             <div className="flex items-center justify-between mb-3">
@@ -152,14 +154,15 @@ const BoxDimensions = ({ boxes, onBoxesChange, onDimensionsChange }) => {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div>
                 <Label htmlFor={`length-${index}`}>Length (cm)</Label>
                 <Input
                   id={`length-${index}`}
                   type="number"
-                  step="0.1"
+                  step="1"
+                  min="0"
                   value={box.lengthCm || ''}
                   onChange={(e) => updateBoxDimensions(index, 'lengthCm', e.target.value)}
                   placeholder="0"
@@ -170,7 +173,8 @@ const BoxDimensions = ({ boxes, onBoxesChange, onDimensionsChange }) => {
                 <Input
                   id={`width-${index}`}
                   type="number"
-                  step="0.1"
+                  step="1"
+                  min="0"
                   value={box.widthCm || ''}
                   onChange={(e) => updateBoxDimensions(index, 'widthCm', e.target.value)}
                   placeholder="0"
@@ -181,14 +185,15 @@ const BoxDimensions = ({ boxes, onBoxesChange, onDimensionsChange }) => {
                 <Input
                   id={`height-${index}`}
                   type="number"
-                  step="0.1"
+                  step="1"
+                  min="0"
                   value={box.heightCm || ''}
                   onChange={(e) => updateBoxDimensions(index, 'heightCm', e.target.value)}
                   placeholder="0"
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor={`actual-weight-${index}`}>Actual Weight (kg)</Label>
@@ -219,14 +224,14 @@ const ProductInvoiceSection = ({ items, onItemsChange, boxes }) => {
   const updateItem = (index, field, value) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
-    
+
     // Auto-calculate total
     if (field === 'pieces' || field === 'unitValue') {
       const pieces = parseFloat(newItems[index].pieces) || 0;
       const unitValue = parseFloat(newItems[index].unitValue) || 0;
       newItems[index].total = pieces * unitValue;
     }
-    
+
     onItemsChange(newItems);
   };
 
@@ -314,10 +319,11 @@ const ProductInvoiceSection = ({ items, onItemsChange, boxes }) => {
                       <td className="border border-gray-300 px-2 py-1">
                         <Input
                           type="number"
+                          step="1"
+                          min="1"
                           value={item.pieces}
                           onChange={(e) => updateItem(index, 'pieces', e.target.value)}
                           className="border-0 p-1 h-8"
-                          min="1"
                         />
                       </td>
                       <td className="border border-gray-300 px-2 py-1">
@@ -350,7 +356,7 @@ const ProductInvoiceSection = ({ items, onItemsChange, boxes }) => {
                 </tbody>
               </table>
             </div>
-            
+
             <div className="flex justify-end">
               <div className="bg-gray-50 px-4 py-2 rounded-md">
                 <span className="font-medium">Total Customs Value: </span>
@@ -364,27 +370,27 @@ const ProductInvoiceSection = ({ items, onItemsChange, boxes }) => {
   );
 };
 
-const BillingInvoiceSection = ({ 
-  billingData, 
-  onBillingChange, 
-  chargedWeight, 
-  actualWeight, 
-  volumeWeight 
+const BillingInvoiceSection = ({
+  billingData,
+  onBillingChange,
+  chargedWeight,
+  actualWeight,
+  volumeWeight
 }) => {
   const [lastEdited, setLastEdited] = useState('totalRate');
   const [calculationMode, setCalculationMode] = useState('auto'); // 'auto', 'ratePerKg', 'totalRate'
 
   const updateBillingData = (field, value) => {
     const newData = { ...billingData };
-    
+
     // Check if field is numeric or text
     const numericFields = ['ratePerKg', 'totalRate', 'eFormCharges', 'remoteAreaCharges', 'boxCharges', 'grandTotal', 'cashAmount'];
-    
+
     if (numericFields.includes(field)) {
       // Convert value to number for numeric fields
       const numericValue = parseFloat(value) || 0;
       newData[field] = numericValue;
-      
+
       // Handle bidirectional rate synchronization
       if (field === 'ratePerKg' && chargedWeight > 0) {
         // Forward calculation: Rate per kg × Weight = Total rate
@@ -397,25 +403,25 @@ const BillingInvoiceSection = ({
         setLastEdited('totalRate');
         setCalculationMode('totalRate');
       }
-      
+
       // Calculate grand total
-      const otherCharges = (newData.eFormCharges || 0) + 
-                          (newData.remoteAreaCharges || 0) + 
-                          (newData.boxCharges || 0);
+      const otherCharges = (newData.eFormCharges || 0) +
+        (newData.remoteAreaCharges || 0) +
+        (newData.boxCharges || 0);
       newData.grandTotal = (newData.totalRate || 0) + otherCharges;
     } else {
       // For non-numeric fields (like paymentMethod, customerAccountId), use value as-is
       newData[field] = value;
     }
-    
+
     onBillingChange(newData);
   };
 
   const updateOtherCharge = (field, value) => {
     const newData = { ...billingData, [field]: parseFloat(value) || 0 };
-    const otherCharges = (newData.eFormCharges || 0) + 
-                        (newData.remoteAreaCharges || 0) + 
-                        (newData.boxCharges || 0);
+    const otherCharges = (newData.eFormCharges || 0) +
+      (newData.remoteAreaCharges || 0) +
+      (newData.boxCharges || 0);
     newData.grandTotal = (newData.totalRate || 0) + otherCharges;
     onBillingChange(newData);
   };
@@ -423,9 +429,9 @@ const BillingInvoiceSection = ({
   // Function to recalculate based on current mode
   const recalculateBasedOnMode = (mode) => {
     if (chargedWeight <= 0) return;
-    
+
     const newData = { ...billingData };
-    
+
     if (mode === 'ratePerKg' && billingData.ratePerKg) {
       // Calculate total rate from rate per kg
       newData.totalRate = parseFloat(billingData.ratePerKg) * chargedWeight;
@@ -433,13 +439,13 @@ const BillingInvoiceSection = ({
       // Calculate rate per kg from total rate
       newData.ratePerKg = parseFloat(billingData.totalRate) / chargedWeight;
     }
-    
+
     // Recalculate grand total
-    const otherCharges = (newData.eFormCharges || 0) + 
-                        (newData.remoteAreaCharges || 0) + 
-                        (newData.boxCharges || 0);
+    const otherCharges = (newData.eFormCharges || 0) +
+      (newData.remoteAreaCharges || 0) +
+      (newData.boxCharges || 0);
     newData.grandTotal = (newData.totalRate || 0) + otherCharges;
-    
+
     onBillingChange(newData);
   };
 
@@ -487,16 +493,15 @@ const BillingInvoiceSection = ({
         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-md">
           <div className="flex items-center space-x-2">
             <span className="text-sm font-medium text-blue-800">Calculation Mode:</span>
-            <span className={`px-2 py-1 rounded text-xs font-medium ${
-              calculationMode === 'ratePerKg' 
-                ? 'bg-green-100 text-green-800' 
-                : calculationMode === 'totalRate'
+            <span className={`px-2 py-1 rounded text-xs font-medium ${calculationMode === 'ratePerKg'
+              ? 'bg-green-100 text-green-800'
+              : calculationMode === 'totalRate'
                 ? 'bg-orange-100 text-orange-800'
                 : 'bg-gray-100 text-gray-800'
-            }`}>
-              {calculationMode === 'ratePerKg' ? 'Rate per kg → Total Rate' : 
-               calculationMode === 'totalRate' ? 'Total Rate → Rate per kg' : 
-               'Auto'}
+              }`}>
+              {calculationMode === 'ratePerKg' ? 'Rate per kg → Total Rate' :
+                calculationMode === 'totalRate' ? 'Total Rate → Rate per kg' :
+                  'Auto'}
             </span>
           </div>
           <div className="text-xs text-blue-600">
@@ -726,7 +731,7 @@ const BillingInvoiceSection = ({
                     className="mt-1"
                   />
                 </div>
-                
+
                 <div className="text-sm space-y-1">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Amount:</span>
@@ -740,11 +745,10 @@ const BillingInvoiceSection = ({
                   </div>
                   <div className="flex justify-between pt-2 border-t border-green-300">
                     <span className="font-medium text-gray-700">Remaining Balance:</span>
-                    <span className={`font-bold ${
-                      ((billingData.grandTotal || 0) - (billingData.cashAmount || 0)) > 0 
-                        ? 'text-orange-600' 
-                        : 'text-green-600'
-                    }`}>
+                    <span className={`font-bold ${((billingData.grandTotal || 0) - (billingData.cashAmount || 0)) > 0
+                      ? 'text-orange-600'
+                      : 'text-green-600'
+                      }`}>
                       Rs {formatNumber(Math.max(0, (billingData.grandTotal || 0) - (billingData.cashAmount || 0)))}
                     </span>
                   </div>
@@ -788,13 +792,13 @@ const BillingInvoiceSection = ({
 };
 
 // Create Entity Modal Component
-const CreateEntityModal = ({ 
-  isOpen, 
-  onClose, 
-  onSubmit, 
-  entityType, 
+const CreateEntityModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  entityType,
   initialName = '',
-  loading = false 
+  loading = false
 }) => {
   const [formData, setFormData] = useState({
     personName: initialName,

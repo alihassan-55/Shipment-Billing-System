@@ -321,7 +321,7 @@ function generateDeclaredValueInvoicePDF(doc, invoice) {
 
    const tableData = (invoice.lineItems || []).map(item => ({
       description: cleanText(item.description),
-      qty: item.quantity || 1,
+      qty: Math.floor(item.quantity || 1),
       price: `Rs ${item.unitPrice?.toFixed(2) || '0.00'}`,
       total: `Rs ${item.total?.toFixed(2) || '0.00'}`
    }));
@@ -382,15 +382,15 @@ function generateBillingInvoicePDF(doc, invoice) {
    if (invoice.lineItems && invoice.lineItems.length > 0) {
       tableData = invoice.lineItems.map(item => ({
          description: cleanText(item.description),
-         weight: item.quantity || shipment.actualWeightKg,
-         volWeight: shipment.volumeWeightKg || '-',
+         weight: Math.floor(item.quantity || shipment.actualWeightKg),
+         volWeight: shipment.volumeWeightKg ? Math.floor(shipment.volumeWeightKg) : '-',
          amount: `Rs ${item.total.toFixed(2)}`
       }));
    } else {
       tableData.push({
          description: 'Shipping Charges',
-         weight: shipment.actualWeightKg,
-         volWeight: shipment.volumeWeightKg,
+         weight: Math.floor(shipment.actualWeightKg),
+         volWeight: Math.floor(shipment.volumeWeightKg),
          amount: `Rs ${invoice.total.toFixed(2)}`
       });
    }
@@ -399,7 +399,7 @@ function generateBillingInvoicePDF(doc, invoice) {
 
    // 4. Summary
    const summaryItems = [
-      { label: 'Charged Weight:', value: `${shipment.chargedWeightKg} KG` },
+      { label: 'Charged Weight:', value: `${Math.floor(shipment.chargedWeightKg)} KG` },
       { label: 'Total Amount:', value: `Rs ${invoice.total.toFixed(2)}`, isTotal: true }
    ];
    drawSummary(doc, y, summaryItems);
