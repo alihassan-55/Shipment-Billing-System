@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import { useDataStore } from '../stores/dataStore';
 import { useToast } from '../lib/use-toast';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,11 +13,13 @@ import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 
 const EmployeesPage = () => {
     const { employees, fetchEmployees, createEmployee, updateEmployee, deleteEmployee, isLoading } = useAuthStore();
+    const { fetchShipments } = useDataStore();
     const { toast } = useToast();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingEmployee, setEditingEmployee] = useState(null);
+    const [employeeShipmentCounts, setEmployeeShipmentCounts] = useState({});
 
     // Form state
     const [formData, setFormData] = useState({
@@ -29,7 +32,34 @@ const EmployeesPage = () => {
 
     useEffect(() => {
         fetchEmployees();
+        fetchEmployeeShipmentCounts();
     }, []);
+
+    // Fetch shipment counts for all employees
+    const fetchEmployeeShipmentCounts = async () => {
+        if (!employees || employees.length === 0) return;
+
+        const counts = {};
+        await Promise.all(
+            employees.map(async (emp) => {
+                try {
+                    const result = await fetchShipments({ employeeId: emp.id });
+                    counts[emp.id] = result.shipments?.length || 0;
+                } catch (error) {
+                    console.error(`Failed to fetch shipments for employee ${emp.id}:`, error);
+                    counts[emp.id] = 0;
+                }
+            })
+        );
+        setEmployeeShipmentCounts(counts);
+    };
+
+    // Re-fetch shipment counts when employees change
+    useEffect(() => {
+        if (employees && employees.length > 0) {
+            fetchEmployeeShipmentCounts();
+        }
+    }, [employees]);
 
     const filteredEmployees = employees.filter(emp =>
         emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -145,17 +175,18 @@ const EmployeesPage = () => {
                             <TableHead>Email</TableHead>
                             <TableHead>Role</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>No. of Shipments</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24">Loading...</TableCell>
+                                <TableCell colSpan={6} className="text-center h-24">Loading...</TableCell>
                             </TableRow>
                         ) : filteredEmployees.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24">No employees found.</TableCell>
+                                <TableCell colSpan={6} className="text-center h-24">No employees found.</TableCell>
                             </TableRow>
                         ) : (
                             filteredEmployees.map((emp) => (
@@ -170,6 +201,11 @@ const EmployeesPage = () => {
                                     <TableCell>
                                         <Badge variant={emp.isActive ? 'outline' : 'destructive'}>
                                             {emp.isActive ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary">
+                                            {employeeShipmentCounts[emp.id] || 0}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right space-x-2">
