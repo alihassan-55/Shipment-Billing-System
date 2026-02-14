@@ -12,7 +12,9 @@ import {
   Clock,
   TrendingUp,
   Users,
-  Truck
+  Truck,
+  UserPlus,
+  Settings
 } from "lucide-react"
 
 const DashboardPage = () => {
@@ -145,30 +147,39 @@ const DashboardPage = () => {
               </button>
 
               <button
-                onClick={() => navigate('/invoices')}
-                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
-              >
-                <FileText className="h-6 w-6 text-green-600 mb-2" />
-                <p className="font-medium">Generate Invoice</p>
-                <p className="text-sm text-gray-500">Create invoice</p>
-              </button>
-
-              <button
                 onClick={() => navigate('/customers')}
                 className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
               >
-                <Users className="h-6 w-6 text-purple-600 mb-2" />
+                <UserPlus className="h-6 w-6 text-green-600 mb-2" />
                 <p className="font-medium">Add Customer</p>
                 <p className="text-sm text-gray-500">New customer</p>
               </button>
 
               <button
-                onClick={() => navigate('/reports')}
+                onClick={() => navigate('/payments')}
                 className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
               >
-                <TrendingUp className="h-6 w-6 text-orange-600 mb-2" />
-                <p className="font-medium">View Reports</p>
-                <p className="text-sm text-gray-500">Analytics</p>
+                <DollarSign className="h-6 w-6 text-purple-600 mb-2" />
+                <p className="font-medium">Record Payment</p>
+                <p className="text-sm text-gray-500">Add payment</p>
+              </button>
+
+              <button
+                onClick={() => navigate('/employees')}
+                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
+                <Users className="h-6 w-6 text-orange-600 mb-2" />
+                <p className="font-medium">Add Employee</p>
+                <p className="text-sm text-gray-500">New employee</p>
+              </button>
+
+              <button
+                onClick={() => navigate('/profile')}
+                className="p-4 border rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
+                <Settings className="h-6 w-6 text-indigo-600 mb-2" />
+                <p className="font-medium">Edit User Profile</p>
+                <p className="text-sm text-gray-500">Update profile</p>
               </button>
             </div>
           </CardContent>
