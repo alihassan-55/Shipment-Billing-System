@@ -2,11 +2,11 @@ import { prisma } from '../db/client.js';
 import { withDatabaseRetry, handleDatabaseError } from '../middleware/database.js';
 
 export async function createCustomer(req, res) {
-  const { 
-    name, 
-    company, 
-    email, 
-    phone, 
+  const {
+    name,
+    company,
+    email,
+    phone,
     addresses,
     // Shipper-specific fields
     personName,
@@ -19,22 +19,22 @@ export async function createCustomer(req, res) {
 
   // Determine if this is a shipper creation
   const isShipper = personName && address && city;
-  
+
   if (!name && !personName) {
     return res.status(400).json({ error: 'Name or Person Name required' });
   }
 
   // Validate CNIC format if provided
   if (cnic && !/^[0-9-]{5,20}$/.test(cnic)) {
-    return res.status(400).json({ 
-      error: 'CNIC must contain only digits and dashes, 5-20 characters' 
+    return res.status(400).json({
+      error: 'CNIC must contain only digits and dashes, 5-20 characters'
     });
   }
 
   // Validate NTN format if provided
   if (ntn && !/^[A-Za-z0-9-]{3,25}$/.test(ntn)) {
-    return res.status(400).json({ 
-      error: 'NTN must be alphanumeric with dashes, 3-25 characters' 
+    return res.status(400).json({
+      error: 'NTN must be alphanumeric with dashes, 3-25 characters'
     });
   }
 
@@ -79,18 +79,18 @@ export async function createCustomer(req, res) {
 }
 
 export async function getCustomers(req, res) {
-  const { page = 1, limit = 50, search, query, sortBy = 'createdAt', sortOrder = 'desc', type } = req.query;
+  const { page = 1, limit = 20, search, query, sortBy = 'createdAt', sortOrder = 'desc', type } = req.query;
 
   const where = {};
-  
+
   // Use query parameter if search is not provided (for autocomplete)
   const searchTerm = search || query;
-  
+
   // If type is 'shipper', only return customers with shipper data
   if (type === 'shipper') {
     where.personName = { not: null };
   }
-  
+
   if (searchTerm) {
     if (type === 'shipper') {
       // For shipper search, search in personName, city, phone, cnic, ntn
@@ -122,7 +122,7 @@ export async function getCustomers(req, res) {
           where,
           skip,
           take: parseInt(limit),
-          include: { 
+          include: {
             addresses: {
               select: {
                 id: true,
@@ -131,7 +131,7 @@ export async function getCustomers(req, res) {
                 state: true,
                 country: true
               }
-            } 
+            }
           },
           orderBy,
         }),
@@ -245,8 +245,8 @@ export async function deleteCustomer(req, res) {
     });
 
     if (shipments > 0 || invoices > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete customer with existing shipments or invoices' 
+      return res.status(400).json({
+        error: 'Cannot delete customer with existing shipments or invoices'
       });
     }
 
@@ -255,7 +255,7 @@ export async function deleteCustomer(req, res) {
       await prisma.address.deleteMany({
         where: { customerId: id }
       });
-      
+
       // Then delete the customer
       await prisma.customer.delete({
         where: { id }
@@ -273,49 +273,49 @@ export async function deleteCustomer(req, res) {
 // Shipper-specific functions (for backward compatibility with frontend)
 export async function getShippers(req, res) {
   const { query } = req.query;
-  
-    console.log('getShippers called with query:', query);
-    
-    try {
-      // Only return customers that have shipper data (personName is not null)
-      const where = {
-        personName: { not: null }
-      };
-      
-      if (query) {
-        where.OR = [
-          { personName: { contains: query, mode: 'insensitive' } },
-          { name: { contains: query, mode: 'insensitive' } },
-          { city: { contains: query, mode: 'insensitive' } },
-          { phone: { contains: query, mode: 'insensitive' } },
-          { cnic: { contains: query, mode: 'insensitive' } },
-          { ntn: { contains: query, mode: 'insensitive' } }
-        ];
+
+  console.log('getShippers called with query:', query);
+
+  try {
+    // Only return customers that have shipper data (personName is not null)
+    const where = {
+      personName: { not: null }
+    };
+
+    if (query) {
+      where.OR = [
+        { personName: { contains: query, mode: 'insensitive' } },
+        { name: { contains: query, mode: 'insensitive' } },
+        { city: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+        { cnic: { contains: query, mode: 'insensitive' } },
+        { ntn: { contains: query, mode: 'insensitive' } }
+      ];
+    }
+
+    console.log('Searching customers with where clause:', JSON.stringify(where, null, 2));
+
+    const customers = await prisma.customer.findMany({
+      where,
+      orderBy: { personName: 'asc' },
+      take: 20,
+      select: {
+        id: true,
+        name: true,        // Added name field
+        personName: true,
+        phone: true,
+        address: true,
+        city: true,
+        country: true,
+        email: true,
+        cnic: true,
+        ntn: true,
+        createdAt: true,
+        updatedAt: true
       }
+    });
 
-      console.log('Searching customers with where clause:', JSON.stringify(where, null, 2));
-
-      const customers = await prisma.customer.findMany({
-        where,
-        orderBy: { personName: 'asc' },
-        take: 20,
-        select: {
-          id: true,
-          name: true,        // Added name field
-          personName: true,
-          phone: true,
-          address: true,
-          city: true,
-          country: true,
-          email: true,
-          cnic: true,
-          ntn: true,
-          createdAt: true,
-          updatedAt: true
-        }
-      });
-
-      console.log('Found customers:', customers.length);
+    console.log('Found customers:', customers.length);
 
     // Transform to match expected shipper format
     const shippers = customers.map(customer => ({
@@ -346,10 +346,10 @@ export async function createShipper(req, res) {
 
 export async function getShipper(req, res) {
   const { id } = req.params;
-  
+
   try {
     const customer = await prisma.customer.findUnique({
-      where: { 
+      where: {
         id,
         personName: { not: null } // Only customers with shipper data
       },
@@ -397,32 +397,32 @@ export async function getShipper(req, res) {
 // Phone-based search for shippers (Task 3)
 export async function searchShippersByPhone(req, res) {
   const { phone } = req.query;
-  
+
   console.log('=== PHONE SEARCH DEBUG ===');
   console.log('searchShippersByPhone called with phone:', phone);
   console.log('Request URL:', req.url);
   console.log('Request path:', req.path);
   console.log('Request query:', req.query);
-  
+
   if (!phone) {
     console.log('No phone provided, returning 400');
     return res.status(400).json({ error: 'Phone number is required' });
   }
-  
+
   try {
     // Clean the phone number for searching (remove spaces, dashes, etc.)
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
     console.log('Cleaned phone for search:', cleanPhone);
-    
+
     // First, let's see what customers exist in the database
     const allCustomers = await prisma.customer.findMany({
       where: { personName: { not: null } },
       select: { id: true, personName: true, phone: true }
     });
     console.log('All shippers in database:', allCustomers);
-    
+
     const customer = await prisma.customer.findFirst({
-      where: { 
+      where: {
         OR: [
           { phone: phone }, // Exact match
           { phone: { contains: cleanPhone, mode: 'insensitive' } }, // Partial match

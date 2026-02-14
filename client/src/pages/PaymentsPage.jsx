@@ -5,14 +5,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { useDataStore } from "../stores/dataStore"
 import { formatCurrency, formatDate } from "../lib/utils"
 import { CreditCard, Plus, Eye } from "lucide-react"
+import PaginationControls from "../components/PaginationControls"
 
 const PaymentsPage = () => {
-  const { payments, paymentsLoading, fetchPayments } = useDataStore()
+  const { payments, paymentsLoading, paymentsPagination, fetchPayments } = useDataStore()
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     console.log('PaymentsPage: Fetching payments...')
-    fetchPayments()
-  }, [fetchPayments])
+    fetchPayments({ page: currentPage, limit: 20 })
+  }, [fetchPayments, currentPage])
 
   console.log('PaymentsPage: payments =', payments)
   console.log('PaymentsPage: paymentsLoading =', paymentsLoading)
@@ -78,6 +80,10 @@ const PaymentsPage = () => {
               </TableBody>
             </Table>
           )}
+          <PaginationControls
+            pagination={paymentsPagination}
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
     </div>

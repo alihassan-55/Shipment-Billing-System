@@ -9,12 +9,14 @@ import { useToast } from "../lib/use-toast"
 import { formatCurrency, formatDate } from "../lib/utils"
 import { Download, Edit } from "lucide-react"
 import axios from "axios"
+import PaginationControls from "../components/PaginationControls"
 
 const InvoicesPage = () => {
-  const { invoices, invoicesLoading, fetchInvoices } = useDataStore()
+  const { invoices, invoicesLoading, invoicesPagination, fetchInvoices } = useDataStore()
   const { toast } = useToast()
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
   const [selectedInvoiceForStatus, setSelectedInvoiceForStatus] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Debug logging
   console.log('InvoicesPage: invoices =', invoices)
@@ -22,8 +24,8 @@ const InvoicesPage = () => {
 
   useEffect(() => {
     console.log('InvoicesPage: Fetching invoices...')
-    fetchInvoices()
-  }, [fetchInvoices])
+    fetchInvoices({ page: currentPage, limit: 20 })
+  }, [fetchInvoices, currentPage])
 
   const getStatusBadge = (status) => {
     const variants = {
@@ -44,7 +46,7 @@ const InvoicesPage = () => {
           'Accept': 'application/pdf'
         }
       });
-      
+
       // Create blob URL and trigger download
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -79,10 +81,10 @@ const InvoicesPage = () => {
     try {
       // Convert status to uppercase for server compatibility
       const serverStatus = newStatus === 'Add to Ledger' ? 'ADD_TO_LEDGER' : newStatus.toUpperCase();
-      
+
       console.log('Updating status for invoice:', selectedInvoiceForStatus.id, 'to:', serverStatus);
       console.log('Request URL:', `/invoices/${selectedInvoiceForStatus.id}/status`);
-      
+
       await axios.patch(`/api/invoices/${selectedInvoiceForStatus.id}/status`, {
         status: serverStatus
       });
@@ -149,15 +151,15 @@ const InvoicesPage = () => {
                     <TableCell>{invoice.dueDate ? formatDate(invoice.dueDate) : "-"}</TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleStatusChange(invoice)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleDownloadPDF(invoice.id)}
                         >
@@ -170,6 +172,10 @@ const InvoicesPage = () => {
               </TableBody>
             </Table>
           )}
+          <PaginationControls
+            pagination={invoicesPagination}
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
@@ -182,24 +188,24 @@ const InvoicesPage = () => {
               Update the payment status for invoice #{selectedInvoiceForStatus?.invoiceNumber}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="space-y-3">
-              <Button 
+              <Button
                 variant={selectedInvoiceForStatus?.status === 'Unpaid' ? 'default' : 'outline'}
                 className="w-full justify-start"
                 onClick={() => handleUpdateStatus('Unpaid')}
               >
                 Unpaid
               </Button>
-              <Button 
+              <Button
                 variant={selectedInvoiceForStatus?.status === 'Paid' ? 'default' : 'outline'}
                 className="w-full justify-start"
                 onClick={() => handleUpdateStatus('Paid')}
               >
                 Paid
               </Button>
-              <Button 
+              <Button
                 variant={selectedInvoiceForStatus?.status === 'Add to Ledger' ? 'default' : 'outline'}
                 className="w-full justify-start"
                 onClick={() => handleUpdateStatus('Add to Ledger')}
@@ -207,7 +213,7 @@ const InvoicesPage = () => {
                 Add to Ledger
               </Button>
             </div>
-            
+
             <div className="flex justify-end space-x-2 pt-4">
               <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
                 Cancel

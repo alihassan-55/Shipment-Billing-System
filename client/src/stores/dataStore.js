@@ -46,18 +46,22 @@ export const useDataStore = create((set, get) => ({
   // Customers
   customers: [],
   customersLoading: false,
+  customersPagination: { page: 1, limit: 20, total: 0, pages: 0 },
 
   // Shipments
   shipments: [],
   shipmentsLoading: false,
+  shipmentsPagination: { page: 1, limit: 20, total: 0, pages: 0 },
 
   // Invoices
   invoices: [],
   invoicesLoading: false,
+  invoicesPagination: { page: 1, limit: 20, total: 0, pages: 0 },
 
   // Payments
   payments: [],
   paymentsLoading: false,
+  paymentsPagination: { page: 1, limit: 20, total: 0, pages: 0 },
 
   // Ledger state
   ledgerEntries: [],
@@ -96,21 +100,20 @@ export const useDataStore = create((set, get) => ({
   fetchCustomers: async (params = {}) => {
     set({ customersLoading: true })
     try {
-      const response = await retryRequest(() => axios.get('/customers', { params }))
+      const queryParams = { limit: 20, ...params }
+      const response = await retryRequest(() => axios.get('/customers', { params: queryParams }))
       console.log('Customers response:', response.data)
-      set({ customers: response.data.customers || [], customersLoading: false })
-      return response.data // Return the full response for search functionality
+      const pagination = response.data.pagination || { page: 1, limit: 20, total: 0, pages: 0 }
+      set({ customers: response.data.customers || [], customersPagination: pagination, customersLoading: false })
+      return response.data
     } catch (error) {
       set({ customersLoading: false })
       console.error('Failed to fetch customers after retries:', error)
-      // Set empty array on error to prevent undefined issues
       set({ customers: [] })
-
-      // Show user-friendly error message
       if (error.response?.status === 500) {
         console.error('Server error - database connection may be lost. Please refresh the page.')
       }
-      return { customers: [], pagination: {} } // Return empty response on error
+      return { customers: [], pagination: {} }
     }
   },
 
@@ -162,19 +165,20 @@ export const useDataStore = create((set, get) => ({
   fetchShipments: async (params = {}) => {
     set({ shipmentsLoading: true })
     try {
-      const response = await retryRequest(() => axios.get('/shipments', { params }))
+      const queryParams = { limit: 20, ...params }
+      const response = await retryRequest(() => axios.get('/shipments', { params: queryParams }))
       console.log('Shipments response:', response.data)
-      set({ shipments: response.data.shipments || [], shipmentsLoading: false })
-      return response.data // Return the full response for search functionality
+      const pagination = response.data.pagination || { page: 1, limit: 20, total: 0, pages: 0 }
+      set({ shipments: response.data.shipments || [], shipmentsPagination: pagination, shipmentsLoading: false })
+      return response.data
     } catch (error) {
       set({ shipmentsLoading: false })
       console.error('Failed to fetch shipments after retries:', error)
       set({ shipments: [] })
-
       if (error.response?.status === 500) {
         console.error('Server error - database connection may be lost. Please refresh the page.')
       }
-      return { shipments: [], pagination: {} } // Return empty response on error
+      return { shipments: [], pagination: {} }
     }
   },
 
@@ -214,16 +218,15 @@ export const useDataStore = create((set, get) => ({
   fetchInvoices: async (params = {}) => {
     set({ invoicesLoading: true })
     try {
-      console.log('Fetching invoices with params:', params)
-      const response = await axios.get('/invoices', { params })
+      const queryParams = { limit: 20, ...params }
+      console.log('Fetching invoices with params:', queryParams)
+      const response = await axios.get('/invoices', { params: queryParams })
       console.log('Invoices API response:', response.data)
-      console.log('Invoices count:', response.data.invoices?.length || 0)
-      set({ invoices: response.data.invoices || [], invoicesLoading: false })
+      const pagination = response.data.pagination || { page: 1, limit: 20, total: 0, pages: 0 }
+      set({ invoices: response.data.invoices || [], invoicesPagination: pagination, invoicesLoading: false })
     } catch (error) {
       set({ invoicesLoading: false })
       console.error('Failed to fetch invoices:', error)
-      console.error('Error response:', error.response?.data)
-      // Set empty array on error to prevent undefined issues
       set({ invoices: [] })
     }
   },
@@ -290,13 +293,14 @@ export const useDataStore = create((set, get) => ({
   fetchPayments: async (params = {}) => {
     set({ paymentsLoading: true })
     try {
-      const response = await axios.get('/payments', { params })
+      const queryParams = { limit: 20, ...params }
+      const response = await axios.get('/payments', { params: queryParams })
       console.log('Payments response:', response.data)
-      set({ payments: response.data.payments || [], paymentsLoading: false })
+      const pagination = response.data.pagination || { page: 1, limit: 20, total: 0, pages: 0 }
+      set({ payments: response.data.payments || [], paymentsPagination: pagination, paymentsLoading: false })
     } catch (error) {
       set({ paymentsLoading: false })
       console.error('Failed to fetch payments:', error)
-      // Set empty array on error to prevent undefined issues
       set({ payments: [] })
     }
   },
