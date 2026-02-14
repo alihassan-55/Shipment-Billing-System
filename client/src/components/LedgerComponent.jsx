@@ -170,15 +170,17 @@ const LedgerComponent = ({ customerId = null, showCustomerFilter = true }) => {
 
       {/* Customer Header Box */}
       <div className="bg-white p-6 rounded-lg border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900">
-            {selectedCustomer && selectedCustomer !== 'all' ? selectedCustomerLabel : 'All Customers'}
-          </h2>
-          <p className="text-gray-500 mt-1">
-            {selectedCustomer && selectedCustomer !== 'all' ? 'Ledger for selected customer' : 'Consolidated ledger for all customers'}
-          </p>
-        </div>
-        <div className="flex space-x-2">
+        {showCustomerFilter && (
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900">
+              {selectedCustomer && selectedCustomer !== 'all' ? selectedCustomerLabel : 'All Customers'}
+            </h2>
+            <p className="text-gray-500 mt-1">
+              {selectedCustomer && selectedCustomer !== 'all' ? 'Ledger for selected customer' : 'Consolidated ledger for all customers'}
+            </p>
+          </div>
+        )}
+        <div className={`flex space-x-2 ${!showCustomerFilter ? 'w-full justify-end' : ''}`}>
           <AddPaymentModal
             customerId={selectedCustomer === 'all' ? null : selectedCustomer}
             customerName={selectedCustomer === 'all' ? null : selectedCustomerLabel}
