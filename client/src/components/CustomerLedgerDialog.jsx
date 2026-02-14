@@ -17,6 +17,7 @@ const CustomerLedgerDialog = ({ customer, onClose }) => {
 
                 <div className="mt-4">
                     <LedgerComponent
+                        key={customer.id}
                         customerId={customer.id}
                         showCustomerFilter={false}
                     />
