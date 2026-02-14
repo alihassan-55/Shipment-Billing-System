@@ -10,13 +10,16 @@ import { useDataStore } from "../stores/dataStore"
 import { useToast } from "../lib/use-toast"
 import { Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { countries, searchCountries } from "../utils/countries"
+import CustomerLedgerDialog from "../components/CustomerLedgerDialog"
 
 const CustomersPage = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [isLedgerDialogOpen, setIsLedgerDialogOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState(null)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [selectedCustomerForLedger, setSelectedCustomerForLedger] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState([])
   const [showSearchDropdown, setShowSearchDropdown] = useState(false)
@@ -25,7 +28,7 @@ const CustomersPage = () => {
   const [pageSize] = useState(20)
   const [countrySearchTerm, setCountrySearchTerm] = useState("")
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
-  
+
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     company: "",
@@ -51,9 +54,9 @@ const CustomersPage = () => {
 
   const handleCreateCustomer = async (e) => {
     e.preventDefault()
-    
+
     const result = await createCustomer(newCustomer)
-    
+
     if (result.success) {
       toast({
         title: "Success",
@@ -73,9 +76,9 @@ const CustomersPage = () => {
 
   const handleEditCustomer = async (e) => {
     e.preventDefault()
-    
+
     const result = await updateCustomer(editingCustomer.id, editingCustomer)
-    
+
     if (result.success) {
       toast({
         title: "Success",
@@ -96,7 +99,7 @@ const CustomersPage = () => {
   const handleDeleteCustomer = async (customerId) => {
     if (window.confirm("Are you sure you want to delete this customer?")) {
       const result = await deleteCustomer(customerId)
-      
+
       if (result.success) {
         toast({
           title: "Success",
@@ -154,10 +157,10 @@ const CustomersPage = () => {
   const handleSearch = async (e) => {
     e.preventDefault()
     if (!searchTerm.trim()) return
-    
+
     setIsSearching(true)
     setShowSearchDropdown(true)
-    
+
     try {
       const response = await fetchCustomers({ page: 1, limit: 10, search: searchTerm })
       setSearchResults(response.customers || [])
@@ -172,13 +175,13 @@ const CustomersPage = () => {
   const handleSearchInputChange = (e) => {
     const value = e.target.value
     setSearchTerm(value)
-    
+
     if (value.trim().length > 2) {
       // Auto-search as user types (debounced)
       const timeoutId = setTimeout(() => {
-        handleSearch({ preventDefault: () => {} })
+        handleSearch({ preventDefault: () => { } })
       }, 500)
-      
+
       return () => clearTimeout(timeoutId)
     } else {
       setSearchResults([])
@@ -195,6 +198,11 @@ const CustomersPage = () => {
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage)
+  }
+
+  const handleCustomerRowClick = (customer) => {
+    setSelectedCustomerForLedger(customer)
+    setIsLedgerDialogOpen(true)
   }
 
   const filteredCustomers = (customers || []).filter(customer =>
@@ -234,7 +242,7 @@ const CustomersPage = () => {
               onFocus={() => searchResults.length > 0 && setShowSearchDropdown(true)}
               onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
             />
-            
+
             {/* Search Results Dropdown */}
             {showSearchDropdown && (
               <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
@@ -305,7 +313,11 @@ const CustomersPage = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredCustomers.map((customer) => (
-                    <TableRow key={customer.id}>
+                    <TableRow
+                      key={customer.id}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleCustomerRowClick(customer)}
+                    >
                       <TableCell className="font-medium">{customer.name}</TableCell>
                       <TableCell>{customer.company || "-"}</TableCell>
                       <TableCell>{customer.email || "-"}</TableCell>
@@ -316,16 +328,16 @@ const CustomersPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex space-x-2">
-                          <Button 
-                            variant="outline" 
+                        <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => openEditDialog(customer)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => handleDeleteCustomer(customer.id)}
                           >
@@ -337,7 +349,7 @@ const CustomersPage = () => {
                   ))}
                 </TableBody>
               </Table>
-              
+
               {/* Pagination */}
               <div className="flex items-center justify-between mt-4">
                 <div className="text-sm text-gray-500">
@@ -377,7 +389,7 @@ const CustomersPage = () => {
               Add a new customer to your system
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleCreateCustomer} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -385,7 +397,7 @@ const CustomersPage = () => {
                 <Input
                   id="name"
                   value={newCustomer.name}
-                  onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
                   required
                 />
               </div>
@@ -394,11 +406,11 @@ const CustomersPage = () => {
                 <Input
                   id="company"
                   value={newCustomer.company}
-                  onChange={(e) => setNewCustomer({...newCustomer, company: e.target.value})}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, company: e.target.value })}
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -406,7 +418,7 @@ const CustomersPage = () => {
                   id="email"
                   type="email"
                   value={newCustomer.email}
-                  onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
                 />
               </div>
               <div>
@@ -414,11 +426,11 @@ const CustomersPage = () => {
                 <Input
                   id="phone"
                   value={newCustomer.phone}
-                  onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
                 />
               </div>
             </div>
-            
+
             <div>
               <Label>Address</Label>
               <div className="grid grid-cols-2 gap-4 mt-2">
@@ -537,7 +549,7 @@ const CustomersPage = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 Cancel
@@ -557,7 +569,7 @@ const CustomersPage = () => {
               Update customer information
             </DialogDescription>
           </DialogHeader>
-          
+
           {editingCustomer && (
             <form onSubmit={handleEditCustomer} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
@@ -566,7 +578,7 @@ const CustomersPage = () => {
                   <Input
                     id="edit-name"
                     value={editingCustomer.name}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
                     required
                   />
                 </div>
@@ -575,11 +587,11 @@ const CustomersPage = () => {
                   <Input
                     id="edit-company"
                     value={editingCustomer.company}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, company: e.target.value})}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, company: e.target.value })}
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="edit-email">Email</Label>
@@ -587,7 +599,7 @@ const CustomersPage = () => {
                     id="edit-email"
                     type="email"
                     value={editingCustomer.email}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
                   />
                 </div>
                 <div>
@@ -595,11 +607,11 @@ const CustomersPage = () => {
                   <Input
                     id="edit-phone"
                     value={editingCustomer.phone}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
                   />
                 </div>
               </div>
-              
+
               <div>
                 <Label>Address</Label>
                 <div className="grid grid-cols-2 gap-4 mt-2">
@@ -718,7 +730,7 @@ const CustomersPage = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel
@@ -771,7 +783,7 @@ const CustomersPage = () => {
               </div>
             </div>
           </DialogHeader>
-          
+
           {selectedCustomer && (
             <div className="space-y-6">
               {/* Basic Information */}
@@ -785,7 +797,7 @@ const CustomersPage = () => {
                   <div className="text-lg">{selectedCustomer.company || "-"}</div>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Email</Label>
@@ -844,6 +856,15 @@ const CustomersPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Customer Ledger Dialog */}
+      <CustomerLedgerDialog
+        customer={selectedCustomerForLedger}
+        onClose={() => {
+          setIsLedgerDialogOpen(false)
+          setSelectedCustomerForLedger(null)
+        }}
+      />
     </div>
   )
 }
